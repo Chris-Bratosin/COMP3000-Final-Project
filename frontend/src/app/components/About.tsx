@@ -85,12 +85,12 @@ export function About() {
 
           <div>
             <div className="text-[#4a5d7a] text-sm mb-3">
-              <span className="font-medium">Developer:</span> Chris Bratosin
+              <span className="font-medium">Developer:</span> Chris Bratosin <span className="font-medium">Supervisor:</span> Rory Hopcraft
             </div>
 
             <div className="flex items-center gap-2 text-[#4a5d7a] text-sm mb-6">
               <Mail size={16} />
-              <span>chrisbratosin@example.com</span>
+              <span>chris.bratosin@students.plymouuth.ac.uk</span>
             </div>
 
             <div className="bg-[#f5f7fa] p-4 rounded-lg text-[#4a5d7a] text-xs leading-relaxed">
@@ -110,7 +110,7 @@ export function About() {
 
         {/* GitHub Link */}
         <a
-          href="https://github.com"
+          href="https://github.com/Chris-Bratosin/COMP3000-Final-Project"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 text-[#4a7bbd] hover:text-[#3d5a7e] text-sm font-medium"
