@@ -1,11 +1,6 @@
 
-  # Create new design
+  # Cloud Misconfiguration Auditor Frontend
+  This is the frontend files I designed using the design tool Figma
+  
 
-  This is a code bundle for Create new design. The original project is available at https://www.figma.com/design/t9JsqjeZ4bObzwDkOnZTFs/Create-new-design.
-
-  ## Running the code
-
-  Run `npm i` to install the dependencies.
-
-  Run `npm run dev` to start the development server.
   
