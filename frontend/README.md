@@ -1,6 +1,6 @@
 
   # Cloud Misconfiguration Auditor Frontend
-  This is the frontend files I designed using the design tool Figma
+  These are files for the frontend of the CMA that I design in Figma
   
 
   
