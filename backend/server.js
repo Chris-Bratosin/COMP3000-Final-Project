@@ -1,7 +1,25 @@
 const express = require('express');
+const {
+  AssumeRoleCommand,
+  GetCallerIdentityCommand,
+  STSClient,
+} = require('@aws-sdk/client-sts');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', process.env.FRONTEND_ORIGIN || '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(204);
+    return;
+  }
+
+  next();
+});
 
 app.use(express.json());
 
@@ -11,6 +29,113 @@ app.get('/', (_req, res) => {
 
 app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok' });
+});
+
+function mapAwsConnectionError(error) {
+  switch (error.name) {
+    case 'InvalidClientTokenId':
+      return 'The AWS access key appears to be invalid.';
+    case 'SignatureDoesNotMatch':
+      return 'The secret access key does not match the access key provided.';
+    case 'ExpiredToken':
+      return 'The temporary session token has expired. Generate a new set of sandbox credentials.';
+    case 'UnrecognizedClientException':
+      return 'AWS did not recognise the supplied credentials.';
+    case 'AccessDenied':
+    case 'AccessDeniedException':
+      return 'AWS rejected the request. Check that the credentials are valid and allowed to call STS.';
+    case 'RegionDisabledException':
+      return 'STS is not enabled in the selected region.';
+    default:
+      return error.message || 'AWS connection test failed.';
+  }
+}
+
+app.post('/api/aws/test-connection', async (req, res) => {
+  const {
+    connectionMethod,
+    accessKeyId,
+    secretAccessKey,
+    sessionToken,
+    assumeRoleArn,
+    primaryRegion,
+  } = req.body || {};
+
+  const region = primaryRegion || 'eu-west-1';
+
+  try {
+    let stsClient;
+
+    if (connectionMethod === 'temporary-credentials') {
+      if (!accessKeyId || !secretAccessKey) {
+        res.status(400).json({
+          connected: false,
+          message: 'Access Key ID and Secret Access Key are required.',
+        });
+        return;
+      }
+
+      stsClient = new STSClient({
+        region,
+        credentials: {
+          accessKeyId,
+          secretAccessKey,
+          sessionToken: sessionToken || undefined,
+        },
+      });
+    } else if (connectionMethod === 'assume-role') {
+      if (!assumeRoleArn) {
+        res.status(400).json({
+          connected: false,
+          message: 'Assume Role ARN is required.',
+        });
+        return;
+      }
+
+      const baseClient = new STSClient({ region });
+      const assumeRoleResponse = await baseClient.send(
+        new AssumeRoleCommand({
+          RoleArn: assumeRoleArn,
+          RoleSessionName: 'cma-test-connection',
+        }),
+      );
+
+      if (!assumeRoleResponse.Credentials) {
+        throw new Error('AWS did not return temporary credentials for the supplied role.');
+      }
+
+      stsClient = new STSClient({
+        region,
+        credentials: {
+          accessKeyId: assumeRoleResponse.Credentials.AccessKeyId,
+          secretAccessKey: assumeRoleResponse.Credentials.SecretAccessKey,
+          sessionToken: assumeRoleResponse.Credentials.SessionToken,
+        },
+      });
+    } else if (connectionMethod === 'env-vars') {
+      stsClient = new STSClient({ region });
+    } else {
+      res.status(400).json({
+        connected: false,
+        message: 'Unsupported connection method.',
+      });
+      return;
+    }
+
+    const identity = await stsClient.send(new GetCallerIdentityCommand({}));
+
+    res.status(200).json({
+      connected: true,
+      accountId: identity.Account || '',
+      arn: identity.Arn || '',
+      message: 'Connection successful. AWS credentials were validated with STS.',
+    });
+  } catch (error) {
+    res.status(401).json({
+      connected: false,
+      message: mapAwsConnectionError(error),
+    });
+  }
 });
 
 app.listen(PORT, () => {

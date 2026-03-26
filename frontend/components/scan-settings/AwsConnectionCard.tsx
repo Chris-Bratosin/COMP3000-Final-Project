@@ -15,7 +15,8 @@ interface AwsConnectionCardProps {
   settings: ScanSettingsState;
   onConnectionMethodChange: (value: ConnectionMethod) => void;
   onFieldChange: (field: keyof ScanSettingsState, value: string) => void;
-  onTestConnection: () => void;
+  onTestConnection: () => Promise<void>;
+  isTestingConnection: boolean;
 }
 
 export function AwsConnectionCard({
@@ -24,13 +25,22 @@ export function AwsConnectionCard({
   onConnectionMethodChange,
   onFieldChange,
   onTestConnection,
+  isTestingConnection,
 }: AwsConnectionCardProps) {
+  const connectionBadgeClass =
+    settings.connectionStatus === "Connected"
+      ? "bg-[#5fa75f] text-white"
+      : settings.connectionStatus === "Disconnected"
+        ? "bg-[#e74c4c] text-white"
+        : "bg-[#f9a825] text-white";
+
   return (
     <section className="rounded-lg bg-white p-6 shadow-sm">
       <div className="mb-6 space-y-2">
         <h2>AWS Connection</h2>
         <p className="text-[#4a5d7a]">
-          Choose how CMA authenticates to AWS. Read-only access is recommended.
+          Configure a simple AWS sandbox connection for read-only scanning and test
+          that the supplied credentials are valid before running checks.
         </p>
       </div>
 
@@ -45,23 +55,50 @@ export function AwsConnectionCard({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="aws-profile">AWS Profile</SelectItem>
+              <SelectItem value="temporary-credentials">Temporary Credentials</SelectItem>
               <SelectItem value="assume-role">Assume Role</SelectItem>
               <SelectItem value="env-vars">Environment Variables</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        <div className="grid gap-2">
-          <label htmlFor="profile-name">Profile Name</label>
-          <Input
-            id="profile-name"
-            placeholder="default"
-            value={settings.profileName}
-            onChange={(event) => onFieldChange("profileName", event.target.value)}
-            disabled={settings.connectionMethod !== "aws-profile"}
-          />
-        </div>
+        {settings.connectionMethod === "temporary-credentials" && (
+          <>
+            <div className="grid gap-2">
+              <label htmlFor="access-key-id">Access Key ID</label>
+              <Input
+                id="access-key-id"
+                placeholder="ASIA..."
+                value={settings.accessKeyId}
+                onChange={(event) => onFieldChange("accessKeyId", event.target.value)}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <label htmlFor="secret-access-key">Secret Access Key</label>
+              <Input
+                id="secret-access-key"
+                type="password"
+                placeholder="Enter temporary secret key"
+                value={settings.secretAccessKey}
+                onChange={(event) => onFieldChange("secretAccessKey", event.target.value)}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <label htmlFor="session-token">Session Token</label>
+              <Input
+                id="session-token"
+                placeholder="Paste sandbox session token if required"
+                value={settings.sessionToken}
+                onChange={(event) => onFieldChange("sessionToken", event.target.value)}
+              />
+              <p className="text-sm text-[#4a5d7a]">
+                Recommended for short-lived AWS sandbox credentials.
+              </p>
+            </div>
+          </>
+        )}
 
         {settings.connectionMethod === "assume-role" && (
           <div className="grid gap-2">
@@ -97,10 +134,7 @@ export function AwsConnectionCard({
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="grid gap-2">
             <label>Connection Status</label>
-            <Badge
-              className="bg-[#5fa75f] text-white"
-              variant="default"
-            >
+            <Badge className={connectionBadgeClass} variant="default">
               {settings.connectionStatus}
             </Badge>
           </div>
@@ -113,16 +147,22 @@ export function AwsConnectionCard({
           </div>
         </div>
 
+        <div className="rounded-md bg-[#f5f7fa] px-3 py-3 text-sm text-[#4a5d7a]">
+          {settings.connectionMessage}
+        </div>
+
         <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="max-w-md text-[#4a5d7a]">
-            CMA performs read-only checks and does not modify cloud resources.
+            CMA performs read-only checks and is designed to use short-lived sandbox
+            credentials for testing.
           </p>
           <Button
             type="button"
             className="bg-[#3d5a7e] text-white hover:bg-[#2c4564]"
             onClick={onTestConnection}
+            disabled={isTestingConnection}
           >
-            Test Connection
+            {isTestingConnection ? "Testing..." : "Test Connection"}
           </Button>
         </div>
       </div>

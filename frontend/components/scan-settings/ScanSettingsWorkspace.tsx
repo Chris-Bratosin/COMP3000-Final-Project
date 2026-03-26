@@ -12,6 +12,7 @@ import { SecurityChecksCard } from "@/components/scan-settings/SecurityChecksCar
 
 export function ScanSettingsWorkspace() {
   const [settings, setSettings] = useState<ScanSettingsState>(initialScanSettings);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
 
   const updateField = (
     field: keyof ScanSettingsState,
@@ -20,11 +21,26 @@ export function ScanSettingsWorkspace() {
     setSettings((current) => ({ ...current, [field]: value }));
   };
 
+  const updateConnectionField = (
+    field: keyof ScanSettingsState,
+    value: string,
+  ) => {
+    setSettings((current) => ({
+      ...current,
+      [field]: value,
+      connectionStatus: "Pending",
+      connectedAccount: "",
+      connectionMessage: "Connection details changed. Test the connection again.",
+    }));
+  };
+
   const handleConnectionMethodChange = (value: ScanSettingsState["connectionMethod"]) => {
     setSettings((current) => ({
       ...current,
       connectionMethod: value,
       connectionStatus: "Pending",
+      connectedAccount: "",
+      connectionMessage: "Choose a connection method and test it against AWS STS.",
     }));
   };
 
@@ -62,11 +78,88 @@ export function ScanSettingsWorkspace() {
     }));
   };
 
-  const handleTestConnection = () => {
+  const handleTestConnection = async () => {
+    if (
+      settings.connectionMethod === "temporary-credentials" &&
+      (!settings.accessKeyId.trim() || !settings.secretAccessKey.trim())
+    ) {
+      setSettings((current) => ({
+        ...current,
+        connectionStatus: "Disconnected",
+        connectedAccount: "",
+        connectionMessage: "Access Key ID and Secret Access Key are required.",
+      }));
+      return;
+    }
+
+    if (
+      settings.connectionMethod === "assume-role" &&
+      !settings.assumeRoleArn.trim()
+    ) {
+      setSettings((current) => ({
+        ...current,
+        connectionStatus: "Disconnected",
+        connectedAccount: "",
+        connectionMessage: "Assume Role ARN is required.",
+      }));
+      return;
+    }
+
+    setIsTestingConnection(true);
     setSettings((current) => ({
       ...current,
-      connectionStatus: "Connected",
+      connectionStatus: "Pending",
+      connectedAccount: "",
+      connectionMessage: "Testing AWS credentials with STS...",
     }));
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001"}/api/aws/test-connection`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            connectionMethod: settings.connectionMethod,
+            accessKeyId: settings.accessKeyId,
+            secretAccessKey: settings.secretAccessKey,
+            sessionToken: settings.sessionToken,
+            assumeRoleArn: settings.assumeRoleArn,
+            primaryRegion: settings.primaryRegion,
+          }),
+        },
+      );
+
+      const result = (await response.json()) as {
+        connected?: boolean;
+        accountId?: string;
+        message?: string;
+      };
+
+      if (!response.ok || !result.connected) {
+        throw new Error(result.message || "AWS connection test failed.");
+      }
+
+      setSettings((current) => ({
+        ...current,
+        connectionStatus: "Connected",
+        connectedAccount: result.accountId || "",
+        connectionMessage:
+          result.message || "Connection successful. AWS credentials were validated.",
+      }));
+    } catch (error) {
+      setSettings((current) => ({
+        ...current,
+        connectionStatus: "Disconnected",
+        connectedAccount: "",
+        connectionMessage:
+          error instanceof Error ? error.message : "AWS connection test failed.",
+      }));
+    } finally {
+      setIsTestingConnection(false);
+    }
   };
 
   const saveLabel = () =>
@@ -118,8 +211,9 @@ export function ScanSettingsWorkspace() {
           regions={awsRegions}
           settings={settings}
           onConnectionMethodChange={handleConnectionMethodChange}
-          onFieldChange={(field, value) => updateField(field, value)}
+          onFieldChange={updateConnectionField}
           onTestConnection={handleTestConnection}
+          isTestingConnection={isTestingConnection}
         />
         <ScanScopeCard
           regions={awsRegions}
