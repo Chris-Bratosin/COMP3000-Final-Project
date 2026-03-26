@@ -37,7 +37,7 @@ export interface ActivityEntry {
   message: string;
 }
 
-export type ConnectionMethod = "aws-profile" | "assume-role" | "env-vars";
+export type ConnectionMethod = "temporary-credentials" | "assume-role" | "env-vars";
 export type ScanLevel = "quick" | "standard" | "deep";
 export type RegionScope = "single-region" | "multi-region" | "all-enabled";
 export type OutputFormat = "json" | "html" | "json-html";
@@ -62,11 +62,14 @@ export interface SecurityCheckOption {
 
 export interface ScanSettingsState {
   connectionMethod: ConnectionMethod;
-  profileName: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  sessionToken: string;
   assumeRoleArn: string;
   primaryRegion: string;
   connectionStatus: "Connected" | "Pending" | "Disconnected";
   connectedAccount: string;
+  connectionMessage: string;
   scanLevel: ScanLevel;
   regionScope: RegionScope;
   singleRegion: string;

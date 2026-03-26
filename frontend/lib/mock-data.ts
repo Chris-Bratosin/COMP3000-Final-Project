@@ -21,11 +21,25 @@ export const dashboardMetrics: Metric[] = [
   { label: "Medium Risk", value: 7, color: "yellow" },
 ];
 
+export const preScanDashboardMetrics: Metric[] = [
+  { label: "Total Checks", value: 0, color: "blue" },
+  { label: "Issues Found", value: 0, color: "red" },
+  { label: "High Risk", value: 0, color: "orange" },
+  { label: "Medium Risk", value: 0, color: "yellow" },
+];
+
 export const riskOverviewData: RiskSlice[] = [
   { name: "High Risk", value: 43.8, color: "#e74c4c" },
   { name: "Medium Risk", value: 25.2, color: "#f9a825" },
   { name: "Low Risk", value: 25.0, color: "#4caf50" },
   { name: "Informational", value: 6.0, color: "#4a7bbd" },
+];
+
+export const preScanRiskOverviewData: RiskSlice[] = [
+  { name: "High Risk", value: 0, color: "#e74c4c" },
+  { name: "Medium Risk", value: 0, color: "#f9a825" },
+  { name: "Low Risk", value: 0, color: "#4caf50" },
+  { name: "Informational", value: 0, color: "#4a7bbd" },
 ];
 
 export const recentFindings: Finding[] = [
@@ -55,12 +69,16 @@ export const recentFindings: Finding[] = [
   },
 ];
 
+export const preScanRecentFindings: Finding[] = [];
+
 export const detailedIssues: Issue[] = [
   { id: "issue-1", title: "Public S3 Bucket", severity: "High" },
   { id: "issue-2", title: "Root Account MFA Disabled", severity: "High" },
   { id: "issue-3", title: "Risky Port 22 Exposed", severity: "Medium" },
   { id: "issue-4", title: "Wildcard IAM Policy", severity: "Medium" },
 ];
+
+export const preScanDetailedIssues: Issue[] = [];
 
 export const remediationTips: Tip[] = [
   { id: "tip-1", text: "Enable S3 public access block for all production buckets.", color: "green" },
@@ -69,11 +87,15 @@ export const remediationTips: Tip[] = [
   { id: "tip-4", text: "Review wildcard IAM permissions and reduce them to least privilege.", color: "red" },
 ];
 
+export const preScanRemediationTips: Tip[] = [];
+
 export const activityLogEntries: ActivityEntry[] = [
   { id: "activity-1", time: "12:58 PM", message: "Scan started for production AWS account." },
   { id: "activity-2", time: "12:59 PM", message: 'S3 bucket "audit-exports-prod" flagged as public.' },
   { id: "activity-3", time: "1:02 PM", message: "Root MFA check returned non-compliant." },
 ];
+
+export const preScanActivityLogEntries: ActivityEntry[] = [];
 
 export const awsRegions: RegionOption[] = [
   { value: "us-east-1", label: "us-east-1 (N. Virginia)" },
@@ -108,12 +130,15 @@ export const securityCheckCategories: SecurityCheckCategory[] = [
 ];
 
 export const initialScanSettings: ScanSettingsState = {
-  connectionMethod: "aws-profile",
-  profileName: "default",
+  connectionMethod: "temporary-credentials",
+  accessKeyId: "ASIAEXAMPLEKEY123",
+  secretAccessKey: "",
+  sessionToken: "",
   assumeRoleArn: "",
   primaryRegion: "eu-west-1",
-  connectionStatus: "Connected",
-  connectedAccount: "123456789012",
+  connectionStatus: "Pending",
+  connectedAccount: "",
+  connectionMessage: "Enter sandbox credentials and use Test Connection to validate them.",
   scanLevel: "standard",
   regionScope: "single-region",
   singleRegion: "eu-west-1",
