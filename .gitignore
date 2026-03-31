@@ -5,3 +5,9 @@ frontend/.next/
 frontend/.swc/
 frontend/.dev-start.log
 frontend/coverage/
+.env
+.env.*
+frontend/.env
+frontend/.env.*
+backend/.env
+backend/.env.*
