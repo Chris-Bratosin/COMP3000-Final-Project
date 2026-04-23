@@ -1,15 +1,39 @@
+require('dotenv').config();
+
 const express = require('express');
 const {
   AssumeRoleCommand,
   GetCallerIdentityCommand,
   STSClient,
 } = require('@aws-sdk/client-sts');
+const { connectToDatabase } = require('./src/config/database');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const DEFAULT_FRONTEND_ORIGIN = 'http://localhost:3000';
+const allowedOrigins = (process.env.FRONTEND_ORIGIN || DEFAULT_FRONTEND_ORIGIN)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const connectionTestAttempts = new Map();
+
+function isOriginAllowed(origin) {
+  return !origin || allowedOrigins.includes(origin);
+}
 
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', process.env.FRONTEND_ORIGIN || '*');
+  const origin = req.headers.origin;
+
+  if (!isOriginAllowed(origin)) {
+    res.status(403).json({ message: 'Origin is not allowed.' });
+    return;
+  }
+
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
+  }
+
   res.header('Access-Control-Allow-Headers', 'Content-Type');
   res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
 
@@ -21,7 +45,36 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
+app.use(express.json({ limit: '25kb' }));
+
+function rateLimitConnectionTests(req, res, next) {
+  const windowMs = 60 * 1000;
+  const maxAttempts = 10;
+  const key = req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const entry = connectionTestAttempts.get(key) || {
+    count: 0,
+    resetAt: now + windowMs,
+  };
+
+  if (entry.resetAt <= now) {
+    entry.count = 0;
+    entry.resetAt = now + windowMs;
+  }
+
+  entry.count += 1;
+  connectionTestAttempts.set(key, entry);
+
+  if (entry.count > maxAttempts) {
+    res.status(429).json({
+      connected: false,
+      message: 'Too many connection attempts. Please wait before trying again.',
+    });
+    return;
+  }
+
+  next();
+}
 
 app.get('/', (_req, res) => {
   res.send('Express server is running.');
@@ -51,7 +104,7 @@ function mapAwsConnectionError(error) {
   }
 }
 
-app.post('/api/aws/test-connection', async (req, res) => {
+app.post('/api/aws/test-connection', rateLimitConnectionTests, async (req, res) => {
   const {
     connectionMethod,
     accessKeyId,
@@ -140,4 +193,8 @@ app.post('/api/aws/test-connection', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
+});
+
+connectToDatabase().catch((error) => {
+  console.error('MongoDB connection failed:', error.message);
 });
