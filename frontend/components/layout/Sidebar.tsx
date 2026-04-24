@@ -1,64 +1,81 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { FileText, Home, Info, Settings, ScrollText } from "lucide-react";
+import { FileText, Info, LayoutGrid, ScrollText, ShieldCheck, SlidersHorizontal, X } from "lucide-react";
 
+import { CloudIcon } from "@/components/CloudIcon";
+import { SidebarNav } from "@/components/layout/SidebarNav";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const primaryNavItems = [
-  { href: "/", label: "Dashboard", icon: Home },
-  { href: "/scan-settings", label: "Scan Settings", icon: Settings },
+  { href: "/", label: "Dashboard", icon: LayoutGrid },
+  { href: "/scan-settings", label: "Scan Settings", icon: SlidersHorizontal },
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/logs", label: "Logs", icon: ScrollText },
+  { href: "/policies", label: "Policies", icon: ShieldCheck },
 ];
 
 const secondaryNavItems = [{ href: "/about", label: "About", icon: Info }];
 
-export function Sidebar() {
-  const pathname = usePathname();
+interface SidebarProps {
+  isMobileOpen: boolean;
+  onClose: () => void;
+}
 
-  const isActive = (href: string) => {
-    if (href === "/") {
-      return pathname === "/";
-    }
-
-    return pathname.startsWith(href);
-  };
-
+export function Sidebar({ isMobileOpen, onClose }: SidebarProps) {
   return (
-    <aside className="w-full bg-[#2c4564] text-white md:flex md:min-h-screen md:w-[220px] md:flex-col md:justify-between md:border-r md:border-white/10">
-      <nav className="flex gap-2 overflow-x-auto px-3 py-3 md:flex-1 md:flex-col md:gap-1 md:px-4 md:py-5">
-        {primaryNavItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "flex min-w-fit items-center gap-3 rounded-md px-4 py-3 text-sm transition-colors hover:bg-[#3d5670]",
-              isActive(item.href) && "bg-[#3d5670]",
-            )}
-          >
-            <item.icon size={18} />
-            <span>{item.label}</span>
-          </Link>
-        ))}
-      </nav>
+    <>
+      <div
+        className={cn(
+          "fixed inset-0 z-30 bg-[#2f2417]/25 transition-opacity lg:hidden",
+          isMobileOpen ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+        onClick={onClose}
+      />
 
-      <div className="px-3 pb-3 md:px-4 md:pb-4">
-        {secondaryNavItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "flex min-w-fit items-center gap-3 rounded-md px-4 py-3 text-sm transition-colors hover:bg-[#3d5670]",
-              isActive(item.href) && "bg-[#3d5670]",
-            )}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 flex w-[272px] flex-col border-r border-[#e1d3be] bg-[#f7f1e6] px-4 py-5 shadow-[16px_0_40px_rgba(71,51,27,0.08)] transition-transform lg:static lg:min-h-screen lg:w-[212px] lg:translate-x-0 lg:shadow-none",
+          isMobileOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        <div className="mb-6 flex items-start justify-between gap-4 lg:block">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-2xl border border-[#e6d8c1] bg-[#fcf8f2]">
+              <CloudIcon className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-[0.64rem] font-semibold uppercase tracking-[0.24em] text-[#ab977a]">
+                Cloud Security
+              </p>
+              <p className="text-lg font-semibold leading-5 text-[#3b3228]">
+                Misconfig Auditor
+              </p>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="rounded-xl text-[#6a5b49] lg:hidden"
+            onClick={onClose}
           >
-            <item.icon size={18} />
-            <span>{item.label}</span>
-          </Link>
-        ))}
-      </div>
-    </aside>
+            <X size={18} />
+          </Button>
+        </div>
+
+        <div className="flex flex-1 flex-col justify-between">
+          <div className="space-y-6">
+            <SidebarNav items={primaryNavItems} onNavigate={onClose} />
+          </div>
+
+          <div className="space-y-4 border-t border-[#e6dac6] pt-4">
+            <SidebarNav items={secondaryNavItems} onNavigate={onClose} />
+            <p className="text-xs text-[#9c8b74]">v0.1.1 · Educational use</p>
+          </div>
+        </div>
+      </aside>
+    </>
   );
 }

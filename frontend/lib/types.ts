@@ -1,40 +1,58 @@
 export type MetricColor = "blue" | "red" | "orange" | "yellow";
+export type SeverityLevel = "high" | "medium" | "low";
+export type TimelineTone = "info" | "warn" | "error" | "success";
 
 export interface Metric {
   label: string;
   value: number;
   color: MetricColor;
+  supportingText: string;
 }
 
 export interface RiskSlice {
   name: string;
   value: number;
   color: string;
+  count: number;
+}
+
+export interface PostureOverview {
+  score: number;
+  maxScore: number;
+  grade: string;
+  statusText: string;
+  sampleLabel?: string;
 }
 
 export interface Finding {
   id: string;
   title: string;
-  description: string;
-  severity: "high" | "medium";
+  metadata: string;
+  severity: SeverityLevel;
 }
 
 export interface Issue {
   id: string;
   title: string;
-  severity: "High" | "Medium";
+  metadata: string;
+  severity: SeverityLevel;
 }
 
 export interface Tip {
   id: string;
-  text: string;
-  color: "green" | "orange" | "red";
+  step: number;
+  severity: SeverityLevel;
+  title: string;
+  description: string;
+  actionText: string;
+  scoreImpact?: string;
 }
 
 export interface ActivityEntry {
   id: string;
   time: string;
   message: string;
+  tone: TimelineTone;
 }
 
 export type ConnectionMethod = "temporary-credentials" | "assume-role" | "env-vars";
@@ -113,4 +131,9 @@ export interface StackBadge {
   id: string;
   label: string;
   tone: "blue" | "navy" | "green";
+}
+
+export interface ComplianceFramework {
+  id: string;
+  label: string;
 }

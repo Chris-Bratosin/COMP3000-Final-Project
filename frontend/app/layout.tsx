@@ -6,7 +6,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CMA Frontend",
+  title: "Cloud Misconfiguration Auditor",
   description: "Cloud Misconfiguration Auditor frontend",
 };
 
