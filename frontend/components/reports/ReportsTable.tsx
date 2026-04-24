@@ -1,140 +1,102 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Download, Search } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Download, FilePlus2 } from "lucide-react";
 
+import { PageHeader } from "@/components/shared/PageHeader";
+import { SearchField } from "@/components/shared/SearchField";
+import { SectionCard } from "@/components/shared/SectionCard";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { reportRecords } from "@/lib/mock-data";
-
-type SortKey = "createdAt" | "issues" | "high" | "medium";
 
 const pageSize = 5;
 
 export function ReportsTable() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("createdAt");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [currentPage, setCurrentPage] = useState(1);
 
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
-      return;
-    }
-
-    setSortKey(key);
-    setSortDirection("desc");
-  };
-
-  const filtered = reportRecords.filter((report) =>
-    report.name.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filtered = useMemo(
+    () =>
+      reportRecords.filter((report) =>
+        report.name.toLowerCase().includes(searchQuery.toLowerCase()),
+      ),
+    [searchQuery],
   );
 
-  const sorted = [...filtered].sort((left, right) => {
-    const direction = sortDirection === "asc" ? 1 : -1;
-
-    if (sortKey === "createdAt") {
-      return (
-        (new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()) *
-        direction
-      );
-    }
-
-    return (left[sortKey] - right[sortKey]) * direction;
-  });
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const visibleReports = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
-
-  const sortIcon = (key: SortKey) =>
-    sortKey !== key ? (
-      <ArrowDown size={15} className="text-[#9ca7b5]" />
-    ) : sortDirection === "asc" ? (
-      <ArrowUp size={15} className="text-[#4a7bbd]" />
-    ) : (
-      <ArrowDown size={15} className="text-[#4a7bbd]" />
-    );
+  const visibleReports = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1>Reports</h1>
-          <p className="text-[#4a5d7a]">
-            Review generated scan summaries, issue counts, and export actions.
-          </p>
-        </div>
+      <PageHeader
+        title="Reports"
+        subtitle="Review generated scan summaries, issue counts, and export actions."
+        action={
+          <Button className="h-11 rounded-xl bg-[#8b6949] px-5 text-white hover:bg-[#78583b]">
+            <FilePlus2 size={16} />
+            Generate Report
+          </Button>
+        }
+      />
 
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9ca7b5]" size={18} />
-          <Input
+      <SectionCard
+        title="Saved Reports"
+        description={`${reportRecords.length} reports available.`}
+        actions={
+          <SearchField
             value={searchQuery}
-            onChange={(event) => {
-              setSearchQuery(event.target.value);
+            onChange={(value) => {
+              setSearchQuery(value);
               setCurrentPage(1);
             }}
             placeholder="Search reports..."
-            className="pl-10"
+            className="w-full min-w-[280px] max-w-sm"
           />
-        </div>
-      </header>
-
-      <section className="overflow-hidden rounded-lg bg-white shadow-sm">
+        }
+        contentClassName="overflow-hidden px-0 py-0"
+      >
         <div className="overflow-x-auto">
           <table className="min-w-full">
-            <thead className="bg-[#e8ecf1]">
-              <tr className="text-left text-[#4a5d7a]">
-                <th className="px-4 py-3">
-                  <button type="button" className="inline-flex items-center gap-2" onClick={() => handleSort("createdAt")}>
-                    Date
-                    {sortIcon("createdAt")}
-                  </button>
-                </th>
-                <th className="px-4 py-3">Report Name</th>
-                <th className="px-4 py-3 text-center">
-                  <button type="button" className="inline-flex items-center gap-2" onClick={() => handleSort("issues")}>
-                    Issues
-                    {sortIcon("issues")}
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-center">
-                  <button type="button" className="inline-flex items-center gap-2" onClick={() => handleSort("high")}>
-                    High
-                    {sortIcon("high")}
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-center">
-                  <button type="button" className="inline-flex items-center gap-2" onClick={() => handleSort("medium")}>
-                    Medium
-                    {sortIcon("medium")}
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-right">Actions</th>
+            <thead className="bg-[#f5efe6]">
+              <tr className="text-left text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-[#8d7b64]">
+                <th className="px-6 py-4">Date</th>
+                <th className="px-6 py-4">Report Name</th>
+                <th className="px-6 py-4 text-center">Issues</th>
+                <th className="px-6 py-4 text-center">High</th>
+                <th className="px-6 py-4 text-center">Medium</th>
+                <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y">
+            <tbody className="divide-y divide-[#f0e7da]">
               {visibleReports.map((report) => (
-                <tr key={report.id} className="hover:bg-[#f8fafc]">
-                  <td className="px-4 py-4 text-[#4a5d7a]">{report.dateLabel}</td>
-                  <td className="px-4 py-4 font-medium text-[#2c4564]">{report.name}</td>
-                  <td className="px-4 py-4 text-center text-xl font-semibold text-[#4a7bbd]">
+                <tr key={report.id} className="bg-white">
+                  <td className="px-6 py-4 text-sm text-[#7f715f]">{report.dateLabel}</td>
+                  <td className="px-6 py-4 font-medium text-[#352d24]">{report.name}</td>
+                  <td className="px-6 py-4 text-center font-semibold text-[#352d24]">
                     {report.issues}
                   </td>
-                  <td className="px-4 py-4 text-center text-xl font-semibold text-[#e74c4c]">
+                  <td className="px-6 py-4 text-center font-semibold text-[#e36a63]">
                     {report.high}
                   </td>
-                  <td className="px-4 py-4 text-center text-xl font-semibold text-[#f9a825]">
+                  <td className="px-6 py-4 text-center font-semibold text-[#ea9b39]">
                     {report.medium}
                   </td>
-                  <td className="px-4 py-4">
+                  <td className="px-6 py-4">
                     <div className="flex justify-end gap-2">
-                      <Button className="bg-[#4a7bbd] text-white hover:bg-[#3d5a7e]">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl border-[#e0d3bd] bg-[#fcfaf6] text-[#4a4034] hover:bg-[#f3ecdf]"
+                      >
                         View
                       </Button>
-                      <Button className="bg-[#5fa75f] text-white hover:bg-[#4e8f4e]">
-                        <Download size={18} />
+                      <Button
+                        type="button"
+                        className="rounded-xl bg-[#7ac77f] text-white hover:bg-[#66b06b]"
+                      >
+                        <Download size={16} />
+                        Export
                       </Button>
                     </div>
                   </td>
@@ -144,10 +106,10 @@ export function ReportsTable() {
           </table>
         </div>
 
-        <div className="flex flex-col gap-4 border-t px-4 py-4 text-[#4a5d7a] sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 border-t border-[#f0e7da] px-6 py-4 text-sm text-[#7f715f] sm:flex-row sm:items-center sm:justify-between">
           <p>
             Showing {(safePage - 1) * pageSize + 1}-
-            {Math.min(safePage * pageSize, sorted.length)} of {sorted.length} reports
+            {Math.min(safePage * pageSize, filtered.length)} of {filtered.length} reports
           </p>
 
           <div className="flex items-center gap-2">
@@ -155,26 +117,28 @@ export function ReportsTable() {
               type="button"
               variant="outline"
               size="icon"
+              className="rounded-xl border-[#dfd2bc] bg-[#fcfaf6] text-[#5c4f40] hover:bg-[#f3ecdf]"
               onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
               disabled={safePage === 1}
             >
-              <ChevronLeft size={18} />
+              <ChevronLeft size={16} />
             </Button>
-            <span className="rounded-md bg-[#4a7bbd] px-3 py-2 text-white">
+            <span className="flex h-9 min-w-9 items-center justify-center rounded-xl bg-[#8b6949] px-3 text-sm font-semibold text-white">
               {safePage}
             </span>
             <Button
               type="button"
               variant="outline"
               size="icon"
+              className="rounded-xl border-[#dfd2bc] bg-[#fcfaf6] text-[#5c4f40] hover:bg-[#f3ecdf]"
               onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
               disabled={safePage === totalPages}
             >
-              <ChevronRight size={18} />
+              <ChevronRight size={16} />
             </Button>
           </div>
         </div>
-      </section>
+      </SectionCard>
     </div>
   );
 }
