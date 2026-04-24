@@ -6,7 +6,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import { SectionCard } from "@/components/shared/SectionCard";
+import { SettingsToggleRow } from "@/components/shared/SettingsToggleRow";
 import type { OutputFormat, ScanSettingsState, SeverityThreshold } from "@/lib/types";
 
 interface ReportSettingsCardProps {
@@ -19,101 +20,113 @@ export function ReportSettingsCard({
   onValueChange,
 }: ReportSettingsCardProps) {
   return (
-    <section className="rounded-lg bg-white p-6 shadow-sm">
-      <div className="mb-6 space-y-2">
-        <h2>Report Settings</h2>
-        <p className="text-[#4a5d7a]">
-          Choose how scan results are generated and stored.
-        </p>
+    <SectionCard
+      title="Report Settings"
+      description="Choose how scan results are generated and stored."
+      className="xl:col-span-2"
+      contentClassName="space-y-4"
+    >
+      <div className="grid gap-4 lg:grid-cols-2">
+        <LabeledSelect
+          label="Output Format"
+          value={settings.outputFormat}
+          onValueChange={(value) => onValueChange("outputFormat", value as OutputFormat)}
+          options={[
+            { value: "json", label: "JSON" },
+            { value: "html", label: "HTML" },
+            { value: "json-html", label: "JSON + HTML" },
+          ]}
+        />
+
+        <LabeledSelect
+          label="Severity Threshold"
+          value={settings.severityThreshold}
+          onValueChange={(value) =>
+            onValueChange("severityThreshold", value as SeverityThreshold)
+          }
+          options={[
+            { value: "all", label: "All" },
+            { value: "medium-and-above", label: "Medium and above" },
+            { value: "high-only", label: "High only" },
+          ]}
+        />
       </div>
 
-      <div className="grid gap-5">
+      <SettingsToggleRow
+        title="Include Remediation Advice"
+        description="Attach practical fix guidance to each finding."
+        checked={settings.includeRemediationAdvice}
+        onCheckedChange={(value) => onValueChange("includeRemediationAdvice", value)}
+      />
+      <SettingsToggleRow
+        title="Include Evidence"
+        description="Store supporting evidence for each failing control."
+        checked={settings.includeEvidence}
+        onCheckedChange={(value) => onValueChange("includeEvidence", value)}
+      />
+      <SettingsToggleRow
+        title="Save Scan Logs"
+        description="Keep structured logs from the local scan session."
+        checked={settings.saveScanLogs}
+        onCheckedChange={(value) => onValueChange("saveScanLogs", value)}
+      />
+      <SettingsToggleRow
+        title="Email Notifications"
+        description="Send a summary after each local scan completes."
+        checked={settings.emailNotifications}
+        onCheckedChange={(value) => onValueChange("emailNotifications", value)}
+      />
+
+      {settings.emailNotifications ? (
         <div className="grid gap-2">
-          <label>Output Format</label>
-          <Select
-            value={settings.outputFormat}
-            onValueChange={(value) => onValueChange("outputFormat", value as OutputFormat)}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="json">JSON</SelectItem>
-              <SelectItem value="html">HTML</SelectItem>
-              <SelectItem value="json-html">JSON + HTML</SelectItem>
-            </SelectContent>
-          </Select>
+          <FieldLabel label="Notification Email" />
+          <Input
+            type="email"
+            placeholder="security-team@example.com"
+            value={settings.notificationEmail}
+            onChange={(event) => onValueChange("notificationEmail", event.target.value)}
+            className="h-11 rounded-xl border-[#e4d8c4] bg-[#fcfaf6]"
+          />
         </div>
+      ) : null}
+    </SectionCard>
+  );
+}
 
-        <div className="grid gap-2">
-          <label>Severity Threshold</label>
-          <Select
-            value={settings.severityThreshold}
-            onValueChange={(value) =>
-              onValueChange("severityThreshold", value as SeverityThreshold)
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="medium-and-above">Medium and above</SelectItem>
-              <SelectItem value="high-only">High only</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+function FieldLabel({ label }: { label: string }) {
+  return (
+    <p className="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-[#987f62]">
+      {label}
+    </p>
+  );
+}
 
-        {[
-          {
-            field: "includeRemediationAdvice" as const,
-            title: "Include Remediation Advice",
-            description: "Attach practical fix guidance to each finding.",
-          },
-          {
-            field: "includeEvidence" as const,
-            title: "Include Evidence",
-            description: "Store supporting evidence for each failing control.",
-          },
-          {
-            field: "saveScanLogs" as const,
-            title: "Save Scan Logs",
-            description: "Keep structured logs from the local scan session.",
-          },
-          {
-            field: "emailNotifications" as const,
-            title: "Email Notifications",
-            description: "Send a summary after each local scan completes.",
-          },
-        ].map((item) => (
-          <div
-            key={item.field}
-            className="flex items-center justify-between rounded-lg border bg-[#f5f7fa] px-4 py-3"
-          >
-            <div>
-              <p className="font-medium text-[#2c4564]">{item.title}</p>
-              <p className="text-[#4a5d7a]">{item.description}</p>
-            </div>
-            <Switch
-              checked={Boolean(settings[item.field])}
-              onCheckedChange={(value) => onValueChange(item.field, value)}
-            />
-          </div>
-        ))}
-
-        {settings.emailNotifications && (
-          <div className="grid gap-2">
-            <label htmlFor="notification-email">Notification Email</label>
-            <Input
-              id="notification-email"
-              type="email"
-              placeholder="security-team@example.com"
-              value={settings.notificationEmail}
-              onChange={(event) => onValueChange("notificationEmail", event.target.value)}
-            />
-          </div>
-        )}
-      </div>
-    </section>
+function LabeledSelect({
+  label,
+  value,
+  onValueChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+}) {
+  return (
+    <div className="grid gap-2">
+      <FieldLabel label={label} />
+      <Select value={value} onValueChange={onValueChange}>
+        <SelectTrigger className="h-11 rounded-xl border-[#e4d8c4] bg-[#fcfaf6]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }

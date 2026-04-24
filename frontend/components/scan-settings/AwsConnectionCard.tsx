@@ -1,4 +1,6 @@
-import { Badge } from "@/components/ui/badge";
+import { PlugZap } from "lucide-react";
+
+import { SectionCard } from "@/components/shared/SectionCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,6 +21,12 @@ interface AwsConnectionCardProps {
   isTestingConnection: boolean;
 }
 
+const statusTone: Record<ScanSettingsState["connectionStatus"], string> = {
+  Connected: "border-[#d9eacb] bg-[#f0f7e8] text-[#6ea876]",
+  Pending: "border-[#f1d8b8] bg-[#fbf1e1] text-[#ed9b37]",
+  Disconnected: "border-[#f0c7c5] bg-[#fbe9e7] text-[#dc6f68]",
+};
+
 export function AwsConnectionCard({
   regions,
   settings,
@@ -27,31 +35,22 @@ export function AwsConnectionCard({
   onTestConnection,
   isTestingConnection,
 }: AwsConnectionCardProps) {
-  const connectionBadgeClass =
-    settings.connectionStatus === "Connected"
-      ? "bg-[#5fa75f] text-white"
-      : settings.connectionStatus === "Disconnected"
-        ? "bg-[#e74c4c] text-white"
-        : "bg-[#f9a825] text-white";
-
   return (
-    <section className="rounded-lg bg-white p-6 shadow-sm">
-      <div className="mb-6 space-y-2">
-        <h2>AWS Connection</h2>
-        <p className="text-[#4a5d7a]">
-          Configure a simple AWS sandbox connection for read-only scanning and test
-          that the supplied credentials are valid before running checks.
-        </p>
-      </div>
-
+    <SectionCard
+      title="AWS Connection"
+      description="Configure a sandbox AWS connection for read-only scanning and validate credentials."
+      className="h-full"
+    >
       <div className="grid gap-5">
         <div className="grid gap-2">
-          <label htmlFor="connection-method">Connection Method</label>
+          <label className="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-[#987f62]">
+            Connection Method
+          </label>
           <Select
             value={settings.connectionMethod}
             onValueChange={(value) => onConnectionMethodChange(value as ConnectionMethod)}
           >
-            <SelectTrigger id="connection-method">
+            <SelectTrigger className="h-11 rounded-xl border-[#e4d8c4] bg-[#fcfaf6]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -62,63 +61,67 @@ export function AwsConnectionCard({
           </Select>
         </div>
 
-        {settings.connectionMethod === "temporary-credentials" && (
+        {settings.connectionMethod === "temporary-credentials" ? (
           <>
-            <div className="grid gap-2">
-              <label htmlFor="access-key-id">Access Key ID</label>
-              <Input
-                id="access-key-id"
-                placeholder="ASIA..."
-                value={settings.accessKeyId}
-                onChange={(event) => onFieldChange("accessKeyId", event.target.value)}
-              />
-            </div>
+            <FieldLabel htmlFor="access-key-id" label="Access Key ID" />
+            <Input
+              id="access-key-id"
+              placeholder="ASIA..."
+              value={settings.accessKeyId}
+              onChange={(event) => onFieldChange("accessKeyId", event.target.value)}
+              className="h-11 rounded-xl border-[#e4d8c4] bg-[#fcfaf6]"
+            />
 
-            <div className="grid gap-2">
-              <label htmlFor="secret-access-key">Secret Access Key</label>
-              <Input
-                id="secret-access-key"
-                type="password"
-                placeholder="Enter temporary secret key"
-                value={settings.secretAccessKey}
-                onChange={(event) => onFieldChange("secretAccessKey", event.target.value)}
-              />
-            </div>
+            <FieldLabel htmlFor="secret-access-key" label="Secret Access Key" />
+            <Input
+              id="secret-access-key"
+              type="password"
+              placeholder="Enter temporary secret key"
+              value={settings.secretAccessKey}
+              onChange={(event) => onFieldChange("secretAccessKey", event.target.value)}
+              className="h-11 rounded-xl border-[#e4d8c4] bg-[#fcfaf6]"
+            />
 
-            <div className="grid gap-2">
-              <label htmlFor="session-token">Session Token</label>
-              <Input
-                id="session-token"
-                placeholder="Paste sandbox session token if required"
-                value={settings.sessionToken}
-                onChange={(event) => onFieldChange("sessionToken", event.target.value)}
-              />
-              <p className="text-sm text-[#4a5d7a]">
-                Recommended for short-lived AWS sandbox credentials.
-              </p>
-            </div>
+            <FieldLabel htmlFor="session-token" label="Session Token" />
+            <Input
+              id="session-token"
+              placeholder="Paste sandbox session token if required"
+              value={settings.sessionToken}
+              onChange={(event) => onFieldChange("sessionToken", event.target.value)}
+              className="h-11 rounded-xl border-[#e4d8c4] bg-[#fcfaf6]"
+            />
           </>
-        )}
+        ) : null}
 
-        {settings.connectionMethod === "assume-role" && (
-          <div className="grid gap-2">
-            <label htmlFor="assume-role-arn">Assume Role ARN</label>
+        {settings.connectionMethod === "assume-role" ? (
+          <>
+            <FieldLabel htmlFor="assume-role-arn" label="Assume Role ARN" />
             <Input
               id="assume-role-arn"
               placeholder="arn:aws:iam::123456789012:role/CMAReadOnly"
               value={settings.assumeRoleArn}
               onChange={(event) => onFieldChange("assumeRoleArn", event.target.value)}
+              className="h-11 rounded-xl border-[#e4d8c4] bg-[#fcfaf6]"
             />
+          </>
+        ) : null}
+
+        {settings.connectionMethod === "env-vars" ? (
+          <div className="rounded-[1.1rem] border border-[#eadfcf] bg-[#fcfaf6] px-4 py-4 text-sm leading-6 text-[#7d6f5d]">
+            CMA will read AWS credentials from the backend environment for local testing.
           </div>
-        )}
+        ) : null}
 
         <div className="grid gap-2">
-          <label htmlFor="primary-region">Primary Region</label>
+          <FieldLabel htmlFor="primary-region" label="Primary Region" />
           <Select
             value={settings.primaryRegion}
             onValueChange={(value) => onFieldChange("primaryRegion", value)}
           >
-            <SelectTrigger id="primary-region">
+            <SelectTrigger
+              id="primary-region"
+              className="h-11 rounded-xl border-[#e4d8c4] bg-[#fcfaf6]"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -131,41 +134,40 @@ export function AwsConnectionCard({
           </Select>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="grid gap-2">
-            <label>Connection Status</label>
-            <Badge className={connectionBadgeClass} variant="default">
-              {settings.connectionStatus}
-            </Badge>
+        <div
+          className={`flex flex-col gap-3 rounded-[1.15rem] border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${statusTone[settings.connectionStatus]}`}
+        >
+          <div>
+            <p className="font-semibold">Connection {settings.connectionStatus}</p>
+            <p className="text-sm">{settings.connectionMessage}</p>
+            {settings.connectedAccount ? (
+              <p className="mt-1 text-sm">Connected account: {settings.connectedAccount}</p>
+            ) : null}
           </div>
 
-          <div className="grid gap-2">
-            <label>Connected Account</label>
-            <div className="rounded-md border bg-[#f5f7fa] px-3 py-2 text-[#4a5d7a]">
-              {settings.connectedAccount}
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-md bg-[#f5f7fa] px-3 py-3 text-sm text-[#4a5d7a]">
-          {settings.connectionMessage}
-        </div>
-
-        <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="max-w-md text-[#4a5d7a]">
-            CMA performs read-only checks and is designed to use short-lived sandbox
-            credentials for testing.
-          </p>
           <Button
             type="button"
-            className="bg-[#3d5a7e] text-white hover:bg-[#2c4564]"
+            variant="outline"
+            className="h-10 rounded-xl border-current bg-white/70 text-inherit hover:bg-white"
             onClick={onTestConnection}
             disabled={isTestingConnection}
           >
+            <PlugZap size={16} />
             {isTestingConnection ? "Testing..." : "Test Connection"}
           </Button>
         </div>
       </div>
-    </section>
+    </SectionCard>
+  );
+}
+
+function FieldLabel({ htmlFor, label }: { htmlFor: string; label: string }) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-[#987f62]"
+    >
+      {label}
+    </label>
   );
 }

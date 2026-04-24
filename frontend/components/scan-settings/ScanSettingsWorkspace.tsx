@@ -1,8 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { Save } from "lucide-react";
 
-import { awsRegions, initialScanSettings, securityCheckCategories, securityCheckOptions } from "@/lib/mock-data";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { Button } from "@/components/ui/button";
+import {
+  awsRegions,
+  initialScanSettings,
+  securityCheckCategories,
+  securityCheckOptions,
+} from "@/lib/mock-data";
 import type { ScanSettingsState } from "@/lib/types";
 import { AwsConnectionCard } from "@/components/scan-settings/AwsConnectionCard";
 import { BottomActionBar } from "@/components/scan-settings/BottomActionBar";
@@ -198,13 +206,20 @@ export function ScanSettingsWorkspace() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <h1>Scan Settings</h1>
-        <p className="max-w-3xl text-[#4a5d7a]">
-          Configure how the Cloud Misconfiguration Auditor connects to AWS and which
-          security checks are performed.
-        </p>
-      </header>
+      <PageHeader
+        title="Scan Settings"
+        subtitle="Configure how the auditor connects to AWS and which checks are performed."
+        action={
+          <Button
+            type="button"
+            className="h-11 rounded-xl bg-[#8b6949] px-5 text-white hover:bg-[#78583b]"
+            onClick={handleSave}
+          >
+            <Save size={16} />
+            Save Settings
+          </Button>
+        }
+      />
 
       <div className="grid gap-6 xl:grid-cols-2">
         <AwsConnectionCard
