@@ -1,9 +1,11 @@
 import type {
   ActivityEntry,
+  ComplianceFramework,
   Finding,
   Issue,
   LogRecord,
   Metric,
+  PostureOverview,
   RegionOption,
   ReportRecord,
   RiskSlice,
@@ -15,84 +17,143 @@ import type {
 } from "@/lib/types";
 
 export const dashboardMetrics: Metric[] = [
-  { label: "Total Checks", value: 42, color: "blue" },
-  { label: "Issues Found", value: 16, color: "red" },
-  { label: "High Risk", value: 5, color: "orange" },
-  { label: "Medium Risk", value: 7, color: "yellow" },
+  { label: "Total Checks", value: 42, color: "blue", supportingText: "Across 4 AWS services" },
+  { label: "Issues Found", value: 16, color: "red", supportingText: "38% of all active checks" },
+  { label: "High Risk", value: 5, color: "orange", supportingText: "Fix these first" },
+  { label: "Medium Risk", value: 7, color: "yellow", supportingText: "Schedule this sprint" },
 ];
 
 export const preScanDashboardMetrics: Metric[] = [
-  { label: "Total Checks", value: 0, color: "blue" },
-  { label: "Issues Found", value: 0, color: "red" },
-  { label: "High Risk", value: 0, color: "orange" },
-  { label: "Medium Risk", value: 0, color: "yellow" },
+  { label: "Total Checks", value: 0, color: "blue", supportingText: "No scan has been run yet" },
+  { label: "Issues Found", value: 0, color: "red", supportingText: "Run a scan to populate this card" },
+  { label: "High Risk", value: 0, color: "orange", supportingText: "No critical items recorded" },
+  { label: "Medium Risk", value: 0, color: "yellow", supportingText: "No medium issues recorded" },
 ];
 
+export const dashboardPostureOverview: PostureOverview = {
+  score: 62,
+  maxScore: 100,
+  grade: "D",
+  statusText: "Action required",
+  sampleLabel: "Sample data",
+};
+
+export const preScanPostureOverview: PostureOverview = {
+  score: 0,
+  maxScore: 100,
+  grade: "-",
+  statusText: "Awaiting first scan",
+};
+
 export const riskOverviewData: RiskSlice[] = [
-  { name: "High Risk", value: 43.8, color: "#e74c4c" },
-  { name: "Medium Risk", value: 25.2, color: "#f9a825" },
-  { name: "Low Risk", value: 25.0, color: "#4caf50" },
-  { name: "Informational", value: 6.0, color: "#4a7bbd" },
+  { name: "High Risk", value: 31.25, color: "#eb6a67", count: 5 },
+  { name: "Medium Risk", value: 43.75, color: "#f5a44a", count: 7 },
+  { name: "Low Risk", value: 25, color: "#7ac78d", count: 4 },
 ];
 
 export const preScanRiskOverviewData: RiskSlice[] = [
-  { name: "High Risk", value: 0, color: "#e74c4c" },
-  { name: "Medium Risk", value: 0, color: "#f9a825" },
-  { name: "Low Risk", value: 0, color: "#4caf50" },
-  { name: "Informational", value: 0, color: "#4a7bbd" },
+  { name: "High Risk", value: 0, color: "#eb6a67", count: 0 },
+  { name: "Medium Risk", value: 0, color: "#f5a44a", count: 0 },
+  { name: "Low Risk", value: 0, color: "#7ac78d", count: 0 },
 ];
 
 export const recentFindings: Finding[] = [
   {
     id: "finding-1",
     title: "Public S3 Bucket Detected",
-    description: 'Bucket "audit-exports-prod" is publicly accessible.',
+    metadata: "audit-exports-prod - us-east-1",
     severity: "high",
   },
   {
     id: "finding-2",
     title: "Root MFA Disabled",
-    description: "The AWS root account does not have MFA enabled.",
+    metadata: "AWS root account",
     severity: "high",
   },
   {
     id: "finding-3",
-    title: "Open SSH Port",
-    description: "Port 22 is open to 0.0.0.0/0 on a public security group.",
+    title: "Open SSH Port (22)",
+    metadata: "sg-03ba - Public security group",
     severity: "medium",
   },
   {
     id: "finding-4",
     title: "Unencrypted Secret",
-    description: "A Secrets Manager policy allows overly broad access.",
+    metadata: "Secrets Manager - prod/api-key",
     severity: "medium",
+  },
+  {
+    id: "finding-5",
+    title: "Wildcard IAM Policy",
+    metadata: "AdminRole - inline policy",
+    severity: "low",
   },
 ];
 
 export const preScanRecentFindings: Finding[] = [];
 
 export const detailedIssues: Issue[] = [
-  { id: "issue-1", title: "Public S3 Bucket", severity: "High" },
-  { id: "issue-2", title: "Root Account MFA Disabled", severity: "High" },
-  { id: "issue-3", title: "Risky Port 22 Exposed", severity: "Medium" },
-  { id: "issue-4", title: "Wildcard IAM Policy", severity: "Medium" },
+  { id: "issue-1", title: "Public S3 Bucket", metadata: "Amazon S3 - us-east-1", severity: "high" },
+  { id: "issue-2", title: "Root Account MFA Disabled", metadata: "AWS IAM - global", severity: "high" },
+  { id: "issue-3", title: "Risky Port 22 Exposed", metadata: "Amazon EC2 - eu-west-1", severity: "medium" },
+  { id: "issue-4", title: "Wildcard IAM Policy", metadata: "AWS IAM - global", severity: "medium" },
+  { id: "issue-5", title: "Unused Access Keys", metadata: "AWS IAM - global", severity: "low" },
 ];
 
 export const preScanDetailedIssues: Issue[] = [];
 
 export const remediationTips: Tip[] = [
-  { id: "tip-1", text: "Enable S3 public access block for all production buckets.", color: "green" },
-  { id: "tip-2", text: "Require MFA on the AWS root account and privileged IAM roles.", color: "green" },
-  { id: "tip-3", text: "Restrict internet-facing ingress rules to approved office CIDRs.", color: "orange" },
-  { id: "tip-4", text: "Review wildcard IAM permissions and reduce them to least privilege.", color: "red" },
+  {
+    id: "tip-1",
+    step: 1,
+    severity: "high",
+    title: "Block public access on production S3 buckets",
+    description:
+      "Buckets exposed to the internet can leak sensitive data within minutes of misconfiguration.",
+    actionText:
+      'Enable "Block all public access" at the account level, then audit each bucket policy.',
+    scoreImpact: "Fixing all high items improves score by +28",
+  },
+  {
+    id: "tip-2",
+    step: 2,
+    severity: "high",
+    title: "Require MFA on the AWS root account",
+    description:
+      "Root credentials bypass all IAM policies - a single leak compromises the whole account.",
+    actionText:
+      "Enroll a hardware MFA device in IAM -> Security credentials -> Multi-factor authentication.",
+  },
+  {
+    id: "tip-3",
+    step: 3,
+    severity: "medium",
+    title: "Restrict SSH (port 22) ingress to office CIDRs",
+    description:
+      "0.0.0.0/0 on port 22 invites brute-force attempts from the open internet.",
+    actionText:
+      "Update the security group to allow only your VPN or office IP ranges.",
+  },
+  {
+    id: "tip-4",
+    step: 4,
+    severity: "low",
+    title: "Review wildcard IAM permissions quarterly",
+    description:
+      "Star grants accumulate over time and break the principle of least privilege.",
+    actionText:
+      "Run an Access Analyzer review and replace wildcards with scoped resource ARNs.",
+  },
 ];
 
 export const preScanRemediationTips: Tip[] = [];
 
 export const activityLogEntries: ActivityEntry[] = [
-  { id: "activity-1", time: "12:58 PM", message: "Scan started for production AWS account." },
-  { id: "activity-2", time: "12:59 PM", message: 'S3 bucket "audit-exports-prod" flagged as public.' },
-  { id: "activity-3", time: "1:02 PM", message: "Root MFA check returned non-compliant." },
+  { id: "activity-1", time: "12:58", message: "Scan started for production AWS account.", tone: "info" },
+  { id: "activity-2", time: "12:59", message: 'S3 bucket "audit-exports-prod" flagged as public.', tone: "error" },
+  { id: "activity-3", time: "13:02", message: "Root MFA check returned non-compliant.", tone: "error" },
+  { id: "activity-4", time: "13:05", message: "Security group sg-03ba allows SSH from 0.0.0.0/0.", tone: "warn" },
+  { id: "activity-5", time: "13:09", message: "Scan completed - 16 issues across 4 services.", tone: "success" },
 ];
 
 export const preScanActivityLogEntries: ActivityEntry[] = [];
@@ -123,10 +184,26 @@ export const securityCheckOptions: SecurityCheckOption[] = [
 ];
 
 export const securityCheckCategories: SecurityCheckCategory[] = [
-  { id: "s3", title: "S3", checkIds: ["s3-public-bucket", "s3-public-block", "s3-encryption", "s3-policy"] },
-  { id: "iam", title: "IAM", checkIds: ["iam-root-mfa", "iam-permissive", "iam-unused-keys", "iam-wildcard"] },
-  { id: "network", title: "EC2 / Network", checkIds: ["ec2-public-sg", "ec2-risky-ports", "ec2-broad-ingress"] },
-  { id: "secrets", title: "Secrets", checkIds: ["secrets-policy", "secrets-access"] },
+  {
+    id: "s3",
+    title: "S3",
+    checkIds: ["s3-public-bucket", "s3-public-block", "s3-encryption", "s3-policy"],
+  },
+  {
+    id: "iam",
+    title: "IAM",
+    checkIds: ["iam-root-mfa", "iam-permissive", "iam-unused-keys", "iam-wildcard"],
+  },
+  {
+    id: "network",
+    title: "EC2 / Network",
+    checkIds: ["ec2-public-sg", "ec2-risky-ports", "ec2-broad-ingress"],
+  },
+  {
+    id: "secrets",
+    title: "Secrets",
+    checkIds: ["secrets-policy", "secrets-access"],
+  },
 ];
 
 export const initialScanSettings: ScanSettingsState = {
@@ -283,4 +360,11 @@ export const aboutStackBadges: StackBadge[] = [
   { id: "aws-sdk", label: "AWS SDK", tone: "blue" },
   { id: "vercel", label: "Vercel", tone: "navy" },
   { id: "auth-placeholder", label: "Clerk / Supabase", tone: "green" },
+];
+
+export const complianceFrameworks: ComplianceFramework[] = [
+  { id: "cis", label: "CIS" },
+  { id: "nist", label: "NIST" },
+  { id: "iso27001", label: "ISO 27001" },
+  { id: "soc2", label: "SOC 2" },
 ];
