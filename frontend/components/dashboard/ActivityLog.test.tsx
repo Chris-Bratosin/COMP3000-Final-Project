@@ -8,6 +8,6 @@ describe("ActivityLog", () => {
 
     expect(screen.getByRole("heading", { name: "Activity Log" })).toBeInTheDocument();
     expect(screen.getByText("Scan started for production AWS account.")).toBeInTheDocument();
-    expect(screen.getByText("12:58 PM")).toBeInTheDocument();
+    expect(screen.getByText("12:58")).toBeInTheDocument();
   });
 });

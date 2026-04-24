@@ -1,33 +1,41 @@
-import type { ActivityEntry } from "@/lib/types";
-
+import { EmptyStateCard } from "@/components/shared/EmptyStateCard";
+import { SectionCard } from "@/components/shared/SectionCard";
 import { activityLogEntries } from "@/lib/mock-data";
+import type { ActivityEntry, TimelineTone } from "@/lib/types";
 
-export function ActivityLog({
-  entries = activityLogEntries,
-}: {
-  entries?: ActivityEntry[];
-}) {
+const toneClassByType: Record<TimelineTone, string> = {
+  info: "bg-[#7db4ef]",
+  warn: "bg-[#f2a242]",
+  error: "bg-[#ea6963]",
+  success: "bg-[#74be85]",
+};
+
+export function ActivityLog({ entries = activityLogEntries }: { entries?: ActivityEntry[] }) {
   return (
-    <section className="rounded-lg bg-white p-6 shadow-sm">
-      <h2 className="mb-4">Activity Log</h2>
-      {entries.length > 0 ? (
-        <div className="flex flex-col">
-          {entries.map((entry) => (
-            <div
-              key={entry.id}
-              className="flex items-start gap-4 border-b py-2.5 last:border-b-0"
-            >
-              <span className="w-20 shrink-0 text-[#4a5d7a]">{entry.time}</span>
-              <span className="shrink-0 text-[#9ca7b5]">|</span>
-              <span className="flex-1 text-[#4a5d7a]">{entry.message}</span>
-            </div>
-          ))}
-        </div>
+    <SectionCard
+      title="Activity Log"
+      actions={<p className="text-xs text-[#9b8871]">Today · {entries.length} events</p>}
+    >
+      {entries.length === 0 ? (
+        <EmptyStateCard
+          title="No recent activity"
+          message="Execution history will show here after scans, exports, or settings changes."
+        />
       ) : (
-        <div className="rounded-lg bg-[#f5f7fa] px-4 py-8 text-center text-[#4a5d7a]">
-          No activity has been recorded yet. Scan events will appear here once a run starts.
-        </div>
+        <ul className="space-y-3">
+          {entries.map((entry) => (
+            <li key={entry.id} className="flex items-start gap-3">
+              <span
+                className={`mt-1.5 size-2.5 shrink-0 rounded-full ${toneClassByType[entry.tone]}`}
+              />
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <span className="font-medium text-[#a28d73]">{entry.time}</span>
+                <span className="text-[#4f4335]">{entry.message}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
-    </section>
+    </SectionCard>
   );
 }
