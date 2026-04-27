@@ -13,9 +13,8 @@ const primaryNavItems = [
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/logs", label: "Logs", icon: ScrollText },
   { href: "/policies", label: "Policies", icon: ShieldCheck },
+  { href: "/about", label: "About", icon: Info },
 ];
-
-const secondaryNavItems = [{ href: "/about", label: "About", icon: Info }];
 
 interface SidebarProps {
   isMobileOpen: boolean;
@@ -70,8 +69,7 @@ export function Sidebar({ isMobileOpen, onClose }: SidebarProps) {
             <SidebarNav items={primaryNavItems} onNavigate={onClose} />
           </div>
 
-          <div className="space-y-4 border-t border-[#e6dac6] pt-4">
-            <SidebarNav items={secondaryNavItems} onNavigate={onClose} />
+          <div className="border-t border-[#e6dac6] pt-4">
             <p className="text-xs text-[#9c8b74]">v0.1.1 · Educational use</p>
           </div>
         </div>
