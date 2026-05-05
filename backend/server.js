@@ -7,6 +7,7 @@ const {
   STSClient,
 } = require('@aws-sdk/client-sts');
 const { connectToDatabase } = require('./src/config/database');
+const { runS3Scan } = require('./src/scanners/s3Scanner');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -187,6 +188,84 @@ app.post('/api/aws/test-connection', rateLimitConnectionTests, async (req, res) 
     res.status(401).json({
       connected: false,
       message: mapAwsConnectionError(error),
+    });
+  }
+});
+
+async function resolveCredentialsForScan(body) {
+  const {
+    connectionMethod,
+    accessKeyId,
+    secretAccessKey,
+    sessionToken,
+    assumeRoleArn,
+    primaryRegion,
+  } = body || {};
+  const region = primaryRegion || 'eu-west-1';
+
+  if (connectionMethod === 'temporary-credentials') {
+    if (!accessKeyId || !secretAccessKey) {
+      const err = new Error('Access Key ID and Secret Access Key are required.');
+      err.statusCode = 400;
+      throw err;
+    }
+    return {
+      region,
+      credentials: {
+        accessKeyId,
+        secretAccessKey,
+        sessionToken: sessionToken || undefined,
+      },
+    };
+  }
+
+  if (connectionMethod === 'assume-role') {
+    if (!assumeRoleArn) {
+      const err = new Error('Assume Role ARN is required.');
+      err.statusCode = 400;
+      throw err;
+    }
+    const baseClient = new STSClient({ region });
+    const assumeRoleResponse = await baseClient.send(
+      new AssumeRoleCommand({
+        RoleArn: assumeRoleArn,
+        RoleSessionName: 'cma-scan-run',
+      }),
+    );
+    if (!assumeRoleResponse.Credentials) {
+      throw new Error('AWS did not return temporary credentials for the supplied role.');
+    }
+    return {
+      region,
+      credentials: {
+        accessKeyId: assumeRoleResponse.Credentials.AccessKeyId,
+        secretAccessKey: assumeRoleResponse.Credentials.SecretAccessKey,
+        sessionToken: assumeRoleResponse.Credentials.SessionToken,
+      },
+    };
+  }
+
+  if (connectionMethod === 'env-vars') {
+    return { region, credentials: undefined };
+  }
+
+  const err = new Error('Unsupported connection method.');
+  err.statusCode = 400;
+  throw err;
+}
+
+app.post('/api/scan/s3', async (req, res) => {
+  try {
+    const { region, credentials } = await resolveCredentialsForScan(req.body);
+    const bucketNames = Array.isArray(req.body?.bucketNames) ? req.body.bucketNames : [];
+    const result = await runS3Scan({ region, credentials, bucketNames });
+    res.status(200).json({ ok: true, scan: result });
+  } catch (error) {
+    const status = error.statusCode || (error.name === 'AccessDenied' ? 403 : 500);
+    res.status(status).json({
+      ok: false,
+      message: mapAwsConnectionError(error),
+      errorCode: error.name || 'ScanFailed',
     });
   }
 });
