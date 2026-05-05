@@ -92,6 +92,7 @@ export interface ScanSettingsState {
   regionScope: RegionScope;
   singleRegion: string;
   selectedRegions: string[];
+  bucketNames: string;
   maxFindingsPerService: number;
   includeLowSeverity: boolean;
   stopOnError: boolean;

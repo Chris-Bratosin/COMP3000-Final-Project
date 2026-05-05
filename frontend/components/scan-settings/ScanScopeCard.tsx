@@ -96,6 +96,21 @@ export function ScanScopeCard({
       ) : null}
 
       <div className="grid gap-2">
+        <FieldLabel label="S3 Bucket Names (one per line)" />
+        <textarea
+          value={settings.bucketNames}
+          onChange={(event) => onValueChange("bucketNames", event.target.value)}
+          placeholder={"my-app-prod-logs\nstaging-uploads"}
+          rows={3}
+          className="rounded-xl border border-[#e4d8c4] bg-[#fcfaf6] px-3 py-2 text-sm text-[#5e5144] placeholder:text-[#bfae93] focus:outline-none focus:ring-2 focus:ring-[#cdb892]"
+        />
+        <p className="text-xs text-[#9a8a72]">
+          Optional. Leave blank to scan every bucket in the account. Required if your IAM role
+          denies <code className="rounded bg-[#f3ecdf] px-1 py-0.5">s3:ListAllMyBuckets</code>.
+        </p>
+      </div>
+
+      <div className="grid gap-2">
         <FieldLabel label="Max Findings Per Service" />
         <Input
           type="number"

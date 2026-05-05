@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -12,6 +13,7 @@ import {
   securityCheckOptions,
 } from "@/lib/mock-data";
 import type { ScanSettingsState } from "@/lib/types";
+import { persistScanResult, runS3Scan } from "@/lib/scan";
 import { AwsConnectionCard } from "@/components/scan-settings/AwsConnectionCard";
 import { BottomActionBar } from "@/components/scan-settings/BottomActionBar";
 import { ReportSettingsCard } from "@/components/scan-settings/ReportSettingsCard";
@@ -19,8 +21,11 @@ import { ScanScopeCard } from "@/components/scan-settings/ScanScopeCard";
 import { SecurityChecksCard } from "@/components/scan-settings/SecurityChecksCard";
 
 export function ScanSettingsWorkspace() {
+  const router = useRouter();
   const [settings, setSettings] = useState<ScanSettingsState>(initialScanSettings);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [isRunningScan, setIsRunningScan] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   const updateField = (
     field: keyof ScanSettingsState,
@@ -187,17 +192,35 @@ export function ScanSettingsWorkspace() {
     }));
   };
 
-  const handleRunScan = () => {
+  const handleRunScan = async () => {
+    if (settings.connectionStatus !== "Connected") {
+      setScanError("Test the AWS connection successfully before running a scan.");
+      return;
+    }
+
+    setScanError(null);
+    setIsRunningScan(true);
     setSettings((current) => ({
       ...current,
-      lastSaved: `Local scan queued from saved settings at ${new Date().toLocaleTimeString(
-        "en-GB",
-        {
-          hour: "2-digit",
-          minute: "2-digit",
-        },
-      )}`,
+      lastSaved: `Scan started at ${new Date().toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`,
     }));
+
+    try {
+      const scan = await runS3Scan(settings);
+      persistScanResult(scan);
+      setSettings((current) => ({
+        ...current,
+        lastSaved: `Scan complete - ${scan.summary.issuesFound} issue(s) across ${scan.summary.bucketsScanned} bucket(s)`,
+      }));
+      router.push("/");
+    } catch (error) {
+      setScanError(error instanceof Error ? error.message : "Scan failed.");
+    } finally {
+      setIsRunningScan(false);
+    }
   };
 
   const handleReset = () => {
@@ -252,6 +275,8 @@ export function ScanSettingsWorkspace() {
         onReset={handleReset}
         onSave={handleSave}
         onRunScan={handleRunScan}
+        isRunningScan={isRunningScan}
+        scanError={scanError}
       />
     </div>
   );

@@ -220,6 +220,7 @@ export const initialScanSettings: ScanSettingsState = {
   regionScope: "single-region",
   singleRegion: "eu-west-1",
   selectedRegions: ["eu-west-1", "eu-central-1"],
+  bucketNames: "",
   maxFindingsPerService: 50,
   includeLowSeverity: false,
   stopOnError: false,
