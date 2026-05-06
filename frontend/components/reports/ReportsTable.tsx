@@ -1,26 +1,191 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, FilePlus2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SearchField } from "@/components/shared/SearchField";
 import { SectionCard } from "@/components/shared/SectionCard";
 import { Button } from "@/components/ui/button";
 import { reportRecords } from "@/lib/mock-data";
+import {
+  fetchScanHistory,
+  loadScanResult,
+  mapScanToReport,
+} from "@/lib/scan";
+import type { BackendScanResult } from "@/lib/scan";
+import type { ReportRecord } from "@/lib/types";
 
 const pageSize = 5;
 
 export function ReportsTable() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [liveReport, setLiveReport] = useState<ReportRecord | null>(null);
+  const [historyReports, setHistoryReports] = useState<ReportRecord[]>([]);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [scansById, setScansById] = useState<Record<string, BackendScanResult>>({});
+
+  useEffect(() => {
+    const scan = loadScanResult();
+    if (scan) {
+      const report = mapScanToReport(scan);
+      setLiveReport(report);
+      setScansById((prev) => ({ ...prev, [report.id]: scan }));
+    }
+
+    fetchScanHistory()
+      .then((scans) => {
+        const mapped = scans.map((s, i) => ({
+          report: { ...mapScanToReport(s), id: `scan-${s.completedAt}-${i}` },
+          scan: s,
+        }));
+        setHistoryReports(mapped.map((m) => m.report));
+        setScansById((prev) => {
+          const next = { ...prev };
+          for (const m of mapped) next[m.report.id] = m.scan;
+          return next;
+        });
+        setHistoryError(null);
+      })
+      .catch((error: Error) => {
+        setHistoryError(error.message);
+      });
+  }, []);
+
+  const handleExportReport = (reportId: string) => {
+    const scan = scansById[reportId];
+    if (!scan) {
+      alert("No scan data found for this report.");
+      return;
+    }
+
+    const report = mapScanToReport(scan);
+    const { findings } = scan;
+
+    const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+    for (const f of findings) {
+      const s = f.severity.toLowerCase();
+      if (s === "critical" || s === "high" || s === "medium" || s === "low") {
+        counts[s as keyof typeof counts]++;
+      }
+    }
+
+    const escapeHtml = (s: string) =>
+      String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
+    const rowsFormatted = findings.map((f) => `
+      <tr>
+        <td class="sev"><strong>${escapeHtml(f.severity.charAt(0).toUpperCase() + f.severity.slice(1).toLowerCase())}</strong></td>
+        <td>${escapeHtml(f.resourceId)}</td>
+        <td>${escapeHtml(f.title)}</td>
+        <td>${escapeHtml(f.remediation || "—")}</td>
+      </tr>`).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AWS Security Audit Report</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    @page { size: A4 portrait; margin: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #111; padding: 24px 0; font-size: 14px; }
+    .page { background: #fff; border: 1px solid #d4d4d4; padding: 0; width: 210mm; min-height: 297mm; margin: 0 auto; }
+    .header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 24px; padding: 24px 32px; border-bottom: 1px solid #d4d4d4; }
+    .header .meta { font-size: 13px; line-height: 1.7; color: #111; }
+    .header h1 { font-size: 18px; font-weight: 700; text-align: center; text-decoration: underline; white-space: nowrap; }
+    .header .actions { text-align: right; }
+    .save-btn { padding: 14px 22px; background: #cfe1f5; color: #0a0a0a; border: 1px solid #9bb6d4; border-radius: 4px; font-size: 16px; font-weight: 700; cursor: pointer; }
+    .save-btn:hover { background: #b9d2ed; }
+    .content { padding: 28px 32px 40px; }
+    h2 { font-size: 16px; font-weight: 700; text-decoration: underline; margin-bottom: 18px; }
+    .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 36px; }
+    .summary-card { border: 1px solid #d4d4d4; border-radius: 6px; padding: 18px 12px; text-align: center; }
+    .summary-card .count { font-size: 26px; font-weight: 700; }
+    .summary-card .label { font-size: 12px; color: #555; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; border: 1px solid #d4d4d4; }
+    th, td { padding: 12px 14px; border: 1px solid #d4d4d4; vertical-align: top; text-align: left; }
+    th { background: #f3f3f3; font-weight: 700; }
+    td.sev { width: 90px; }
+    .empty { padding: 24px; text-align: center; color: #6b7280; }
+    @media print {
+      body { background: #fff; padding: 0; }
+      .page { border: none; width: 210mm; min-height: 297mm; margin: 0; }
+      .save-btn { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="meta">
+        <div>Generated: ${escapeHtml(new Date().toLocaleString("en-GB"))}</div>
+        <div>Scan region: ${escapeHtml(scan.region)}</div>
+        <div>${escapeHtml(report.name)}</div>
+      </div>
+      <h1>AWS Security Audit Report</h1>
+      <div class="actions">
+        <button class="save-btn" onclick="window.print()">Save as PDF</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <h2>Summary</h2>
+      <div class="summary">
+        <div class="summary-card"><div class="count">${findings.length}</div><div class="label">Total Findings</div></div>
+        <div class="summary-card"><div class="count">${counts.critical}</div><div class="label">Critical</div></div>
+        <div class="summary-card"><div class="count">${counts.high}</div><div class="label">High</div></div>
+        <div class="summary-card"><div class="count">${counts.medium}</div><div class="label">Medium</div></div>
+        <div class="summary-card"><div class="count">${counts.low}</div><div class="label">Low</div></div>
+      </div>
+
+      ${findings.length === 0
+        ? '<div class="empty">No findings recorded for this scan.</div>'
+        : `<table>
+            <thead><tr><th>Severity</th><th>Resource</th><th>Issue</th><th>Remediation</th></tr></thead>
+            <tbody>${rowsFormatted}</tbody>
+          </table>`}
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const newWindow = window.open("about:blank", "_blank");
+    if (!newWindow) {
+      alert(
+        "The report could not be opened. Please allow pop-ups for this site and try again.",
+      );
+      return;
+    }
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    newWindow.location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
+  const allReports = useMemo(() => {
+    const merged: ReportRecord[] = [];
+    if (liveReport) merged.push(liveReport);
+    for (const r of historyReports) {
+      if (liveReport && r.createdAt === liveReport.createdAt) continue;
+      merged.push(r);
+    }
+    if (merged.length > 0) return merged;
+    return reportRecords;
+  }, [liveReport, historyReports]);
 
   const filtered = useMemo(
     () =>
-      reportRecords.filter((report) =>
+      allReports.filter((report) =>
         report.name.toLowerCase().includes(searchQuery.toLowerCase()),
       ),
-    [searchQuery],
+    [allReports, searchQuery],
   );
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -31,18 +196,18 @@ export function ReportsTable() {
     <div className="space-y-6">
       <PageHeader
         title="Reports"
-        subtitle="Review generated scan summaries, issue counts, and export actions."
-        action={
-          <Button className="h-11 rounded-xl bg-[#8b6949] px-5 text-white hover:bg-[#78583b]">
-            <FilePlus2 size={16} />
-            Generate Report
-          </Button>
-        }
+        subtitle="Review generated scan summaries, issue counts, and export actions. Click Export on any report to download the PDF."
       />
+
+      {historyError && (
+        <section className="rounded-[1.35rem] border border-[#ead7c4] bg-[#fdf4e9] px-5 py-3 text-sm text-[#8a6132]">
+          Scan history is unavailable: {historyError}. Showing the latest in-memory scan only.
+        </section>
+      )}
 
       <SectionCard
         title="Saved Reports"
-        description={`${reportRecords.length} reports available.`}
+        description={`${allReports.length} report${allReports.length === 1 ? "" : "s"} available.`}
         actions={
           <SearchField
             value={searchQuery}
@@ -72,7 +237,16 @@ export function ReportsTable() {
               {visibleReports.map((report) => (
                 <tr key={report.id} className="bg-white">
                   <td className="px-6 py-4 text-sm text-[#7f715f]">{report.dateLabel}</td>
-                  <td className="px-6 py-4 font-medium text-[#352d24]">{report.name}</td>
+                  <td className="px-6 py-4 font-medium text-[#352d24]">
+                    <span className="flex items-center gap-2">
+                      {report.name}
+                      {report.id === "live-scan" && (
+                        <span className="rounded-md bg-[#eef7f0] px-2 py-0.5 text-xs font-semibold text-[#2f6a3d]">
+                          Live
+                        </span>
+                      )}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 text-center font-semibold text-[#352d24]">
                     {report.issues}
                   </td>
@@ -93,6 +267,7 @@ export function ReportsTable() {
                       </Button>
                       <Button
                         type="button"
+                        onClick={() => handleExportReport(report.id)}
                         className="rounded-xl bg-[#7ac77f] text-white hover:bg-[#66b06b]"
                       >
                         <Download size={16} />
