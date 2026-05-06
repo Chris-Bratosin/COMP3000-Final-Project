@@ -8,6 +8,7 @@ const {
 } = require('@aws-sdk/client-sts');
 const { connectToDatabase } = require('./src/config/database');
 const { runS3Scan } = require('./src/scanners/s3Scanner');
+const ScanRecord = require('./src/models/ScanRecord');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -259,6 +260,13 @@ app.post('/api/scan/s3', async (req, res) => {
     const { region, credentials } = await resolveCredentialsForScan(req.body);
     const bucketNames = Array.isArray(req.body?.bucketNames) ? req.body.bucketNames : [];
     const result = await runS3Scan({ region, credentials, bucketNames });
+
+    try {
+      await ScanRecord.create(result);
+    } catch (dbError) {
+      console.warn('[scan] failed to persist scan record:', dbError.message);
+    }
+
     res.status(200).json({ ok: true, scan: result });
   } catch (error) {
     const status = error.statusCode || (error.name === 'AccessDenied' ? 403 : 500);
@@ -266,6 +274,22 @@ app.post('/api/scan/s3', async (req, res) => {
       ok: false,
       message: mapAwsConnectionError(error),
       errorCode: error.name || 'ScanFailed',
+    });
+  }
+});
+
+app.get('/api/scans', async (_req, res) => {
+  try {
+    const records = await ScanRecord.find({})
+      .sort({ completedAt: -1 })
+      .limit(50)
+      .lean();
+    res.status(200).json({ ok: true, scans: records });
+  } catch (error) {
+    res.status(503).json({
+      ok: false,
+      message: 'Scan history is unavailable. The database may not be connected.',
+      errorCode: error.name || 'DatabaseUnavailable',
     });
   }
 });
