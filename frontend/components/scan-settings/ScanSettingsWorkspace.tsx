@@ -14,6 +14,7 @@ import {
 } from "@/lib/mock-data";
 import type { ScanSettingsState } from "@/lib/types";
 import { persistScanResult, runS3Scan } from "@/lib/scan";
+import { loadSettings, saveSettings } from "@/lib/scan-settings-storage";
 import { AwsConnectionCard } from "@/components/scan-settings/AwsConnectionCard";
 import { BottomActionBar } from "@/components/scan-settings/BottomActionBar";
 import { ReportSettingsCard } from "@/components/scan-settings/ReportSettingsCard";
@@ -22,38 +23,11 @@ import { SecurityChecksCard } from "@/components/scan-settings/SecurityChecksCar
 
 export function ScanSettingsWorkspace() {
   const router = useRouter();
-  const [settings, setSettings] = useState<ScanSettingsState>(() => {
-    if (typeof window === "undefined") return initialScanSettings;
-    try {
-      const saved = localStorage.getItem("scanSettings");
-      if (!saved) return initialScanSettings;
-      const parsed = JSON.parse(saved) as Partial<ScanSettingsState>;
-      return {
-        ...initialScanSettings,
-        ...parsed,
-        accessKeyId: "",
-        secretAccessKey: "",
-        sessionToken: "",
-        assumeRoleArn: "",
-        connectionStatus: "Pending",
-        connectedAccount: "",
-        connectionMessage: initialScanSettings.connectionMessage,
-      };
-    } catch {
-      return initialScanSettings;
-    }
-  });
+  const [settings, setSettings] = useState<ScanSettingsState>(() =>
+    loadSettings(initialScanSettings),
+  );
   useEffect(() => {
-    localStorage.setItem(
-      "scanSettings",
-      JSON.stringify({
-        ...settings,
-        accessKeyId: "",
-        secretAccessKey: "",
-        sessionToken: "",
-        assumeRoleArn: "",
-      }),
-    );
+    saveSettings(settings);
   }, [settings]);
 
   const [isTestingConnection, setIsTestingConnection] = useState(false);
