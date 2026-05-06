@@ -2,8 +2,11 @@ import type {
   ActivityEntry,
   Finding,
   Issue,
+  LogLevel,
+  LogRecord,
   Metric,
   PostureOverview,
+  ReportRecord,
   RiskSlice,
   ScanSettingsState,
   SeverityLevel,
@@ -237,15 +240,32 @@ export function mapScanToDashboard(scan: BackendScanResult): DashboardScanData {
     title: f.title,
     metadata: `Amazon ${f.service} - ${f.region}`,
     severity: normaliseSeverity(f.severity),
+    remediation: f.remediation,
+    ruleId: f.ruleId,
+    resourceId: f.resourceId,
+    region: f.region,
   }));
 
-  const tips: Tip[] = sorted.slice(0, 4).map((f, i) => ({
+  const dedupedByRule = sorted.filter(
+    (f, idx, arr) => arr.findIndex((x) => x.ruleId === f.ruleId) === idx,
+  );
+
+  const highScoreImpact =
+    summary.high > 0 && succeeded > 0
+      ? Math.round((summary.high / succeeded) * 100)
+      : 0;
+
+  const tips: Tip[] = dedupedByRule.slice(0, 4).map((f, i) => ({
     id: `tip-${f.id}`,
     step: i + 1,
     severity: normaliseSeverity(f.severity),
     title: f.title,
-    description: f.remediation || "Review the finding and apply the recommended remediation.",
-    actionText: "View remediation",
+    description: "",
+    actionText: f.remediation || "Review the finding and apply the recommended remediation.",
+    scoreImpact:
+      i === 0 && highScoreImpact > 0
+        ? `Fixing all high items improves score by ~${highScoreImpact}`
+        : undefined,
   }));
 
   const startTime = new Date(startedAt).toLocaleTimeString("en-GB", {
@@ -323,4 +343,107 @@ export function loadScanResult(): BackendScanResult | null {
 export function clearScanResult(): void {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem(STORAGE_KEY);
+}
+
+export async function fetchScanHistory(): Promise<BackendScanResult[]> {
+  const response = await fetch(`${BACKEND_URL}/api/scans`);
+  if (!response.ok) {
+    throw new Error(`Scan history request failed (${response.status}).`);
+  }
+  const payload = (await response.json()) as
+    | { ok: true; scans: BackendScanResult[] }
+    | { ok: false; message: string };
+  if (!payload.ok) throw new Error(payload.message);
+  return payload.scans;
+}
+
+function fmtTimestamp(iso: string): string {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} ${d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+export function mapScanToLogs(scan: BackendScanResult): LogRecord[] {
+  const { summary, findings, region, startedAt, completedAt } = scan;
+  const records: LogRecord[] = [];
+  let i = 0;
+
+  records.push({
+    id: `scan-log-${i++}`,
+    timestampLabel: fmtTimestamp(startedAt),
+    createdAt: startedAt,
+    level: "INFO",
+    event: `Scan started in ${region}`,
+    awsService: "Amazon S3",
+  });
+
+  records.push({
+    id: `scan-log-${i++}`,
+    timestampLabel: fmtTimestamp(startedAt),
+    createdAt: startedAt,
+    level: "INFO",
+    event: `Discovered ${summary.bucketsScanned} S3 bucket${summary.bucketsScanned === 1 ? "" : "s"}`,
+    awsService: "Amazon S3",
+  });
+
+  for (const f of findings) {
+    const level: LogLevel =
+      f.severity === "high" || f.severity === "critical" ? "ERROR" : f.severity === "medium" ? "WARN" : "INFO";
+    records.push({
+      id: `scan-log-${i++}`,
+      timestampLabel: fmtTimestamp(completedAt),
+      createdAt: completedAt,
+      level,
+      event: `${f.title} — ${f.resourceId}`,
+      awsService: `Amazon ${f.service}`,
+    });
+  }
+
+  if (summary.checksDenied && summary.checksDenied > 0) {
+    records.push({
+      id: `scan-log-${i++}`,
+      timestampLabel: fmtTimestamp(completedAt),
+      createdAt: completedAt,
+      level: "WARN",
+      event: `${summary.checksDenied} check${summary.checksDenied === 1 ? "" : "s"} denied by IAM policy`,
+      awsService: "AWS IAM",
+    });
+  }
+
+  if (summary.checksErrored && summary.checksErrored > 0) {
+    records.push({
+      id: `scan-log-${i++}`,
+      timestampLabel: fmtTimestamp(completedAt),
+      createdAt: completedAt,
+      level: "ERROR",
+      event: `${summary.checksErrored} check${summary.checksErrored === 1 ? "" : "s"} errored during scan`,
+      awsService: "Amazon S3",
+    });
+  }
+
+  records.push({
+    id: `scan-log-${i++}`,
+    timestampLabel: fmtTimestamp(completedAt),
+    createdAt: completedAt,
+    level: summary.issuesFound > 0 ? "WARN" : "INFO",
+    event: `Scan completed — ${summary.issuesFound} issue${summary.issuesFound === 1 ? "" : "s"} found (${summary.high} high, ${summary.medium} medium, ${summary.low} low)`,
+    awsService: "Amazon S3",
+  });
+
+  return records;
+}
+
+export function mapScanToReport(scan: BackendScanResult): ReportRecord {
+  return {
+    id: "live-scan",
+    dateLabel: new Date(scan.completedAt).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }),
+    createdAt: scan.completedAt,
+    name: `S3 Security Scan — ${scan.region}`,
+    issues: scan.summary.issuesFound,
+    high: scan.summary.high,
+    medium: scan.summary.medium,
+  };
 }

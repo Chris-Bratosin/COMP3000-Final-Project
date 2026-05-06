@@ -42,7 +42,9 @@ export function RemediationTips({ tips }: { tips: Tip[] }) {
                   <SeverityBadge severity={tip.severity} />
                   <h3 className="text-base font-semibold text-[#352d24]">{tip.title}</h3>
                 </div>
-                <p className="text-sm leading-6 text-[#7d6e5d]">{tip.description}</p>
+                {tip.description && (
+                  <p className="text-sm leading-6 text-[#7d6e5d]">{tip.description}</p>
+                )}
                 <div className="flex items-start gap-2 rounded-full bg-[#f5efe5] px-4 py-2 text-sm text-[#5f5347]">
                   <ArrowRight size={15} className="mt-0.5 shrink-0 text-[#a18563]" />
                   <span>
