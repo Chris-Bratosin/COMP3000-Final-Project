@@ -208,7 +208,7 @@ export const securityCheckCategories: SecurityCheckCategory[] = [
 
 export const initialScanSettings: ScanSettingsState = {
   connectionMethod: "temporary-credentials",
-  accessKeyId: "ASIAEXAMPLEKEY123",
+  accessKeyId: "",
   secretAccessKey: "",
   sessionToken: "",
   assumeRoleArn: "",
