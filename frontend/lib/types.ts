@@ -36,6 +36,11 @@ export interface Issue {
   title: string;
   metadata: string;
   severity: SeverityLevel;
+  description?: string;
+  remediation?: string;
+  ruleId?: string;
+  resourceId?: string;
+  region?: string;
 }
 
 export interface Tip {
@@ -138,3 +143,4 @@ export interface ComplianceFramework {
   id: string;
   label: string;
 }
+
