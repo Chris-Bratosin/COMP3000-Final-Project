@@ -204,12 +204,11 @@ export default function DashboardPage() {
         <RecentFindings findings={dashboardState.findings} />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,1fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)_minmax(0,1fr)]">
         <RemediationTips tips={dashboardState.tips} />
         <DetailedIssues issues={dashboardState.issues} />
+        <ActivityLog entries={dashboardState.activity} />
       </div>
-
-      <ActivityLog entries={dashboardState.activity} />
     </div>
   );
 }

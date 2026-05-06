@@ -12,6 +12,9 @@ const primaryNavItems = [
   { href: "/scan-settings", label: "Scan Settings", icon: SlidersHorizontal },
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/logs", label: "Logs", icon: ScrollText },
+];
+
+const secondaryNavItems = [
   { href: "/policies", label: "Policies", icon: ShieldCheck },
   { href: "/about", label: "About", icon: Info },
 ];
@@ -34,7 +37,7 @@ export function Sidebar({ isMobileOpen, onClose }: SidebarProps) {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-[272px] flex-col border-r border-[#e1d3be] bg-[#f7f1e6] px-4 py-5 shadow-[16px_0_40px_rgba(71,51,27,0.08)] transition-transform lg:static lg:min-h-screen lg:w-[212px] lg:translate-x-0 lg:shadow-none",
+          "fixed inset-y-0 left-0 z-40 flex w-[272px] flex-col border-r border-[#e1d3be] bg-[#f7f1e6] px-4 py-5 shadow-[16px_0_40px_rgba(71,51,27,0.08)] transition-transform lg:sticky lg:top-0 lg:h-screen lg:w-[212px] lg:translate-x-0 lg:overflow-y-auto lg:shadow-none",
           isMobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -69,8 +72,11 @@ export function Sidebar({ isMobileOpen, onClose }: SidebarProps) {
             <SidebarNav items={primaryNavItems} onNavigate={onClose} />
           </div>
 
-          <div className="border-t border-[#e6dac6] pt-4">
-            <p className="text-xs text-[#9c8b74]">v0.1.1 · Educational use</p>
+          <div className="space-y-3">
+            <SidebarNav items={secondaryNavItems} onNavigate={onClose} />
+            <div className="border-t border-[#e6dac6] pt-4">
+              <p className="text-xs text-[#9c8b74]">v0.1.1 · Educational use</p>
+            </div>
           </div>
         </div>
       </aside>
