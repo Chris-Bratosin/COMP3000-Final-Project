@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -16,17 +16,33 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { logRecords } from "@/lib/mock-data";
+import { loadScanResult, mapScanToLogs } from "@/lib/scan";
+import type { LogRecord } from "@/lib/types";
 
 export function LogsTable() {
   const [searchQuery, setSearchQuery] = useState("");
   const [levelFilter, setLevelFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
+  const [liveLogs, setLiveLogs] = useState<LogRecord[]>([]);
 
-  const serviceOptions = Array.from(new Set(logRecords.map((entry) => entry.awsService)));
+  useEffect(() => {
+    const scan = loadScanResult();
+    if (scan) setLiveLogs(mapScanToLogs(scan));
+  }, []);
+
+  const allRecords = useMemo(
+    () => (liveLogs.length > 0 ? liveLogs : logRecords),
+    [liveLogs],
+  );
+
+  const serviceOptions = useMemo(
+    () => Array.from(new Set(allRecords.map((entry) => entry.awsService))),
+    [allRecords],
+  );
 
   const filtered = useMemo(
     () =>
-      logRecords
+      allRecords
         .filter((entry) => (levelFilter === "all" ? true : entry.level === levelFilter))
         .filter((entry) =>
           serviceFilter === "all" ? true : entry.awsService === serviceFilter,
@@ -36,8 +52,90 @@ export function LogsTable() {
             .toLowerCase()
             .includes(searchQuery.toLowerCase()),
         ),
-    [levelFilter, searchQuery, serviceFilter],
+    [allRecords, levelFilter, searchQuery, serviceFilter],
   );
+
+  const handleExportLogs = () => {
+    if (filtered.length === 0) {
+      alert("No log entries to export.");
+      return;
+    }
+
+    const escapeHtml = (s: string) =>
+      String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+
+    const rowColor = (level: string) => {
+      switch (level.toUpperCase()) {
+        case "ERROR": return "#f8c9c9";
+        case "WARN":  return "#fde0c0";
+        case "INFO":
+        default:      return "#cfe2f3";
+      }
+    };
+
+    const textColor = (level: string) =>
+      level.toUpperCase() === "ERROR" ? "#9c1c1c" : "#000000";
+
+    const rows = filtered
+      .map((entry) => {
+        const bg = rowColor(entry.level);
+        const fg = textColor(entry.level);
+        const cellStyle = `border:1px solid #000;padding:4px 8px;background:${bg};color:${fg};`;
+        return `<tr>
+          <td style="${cellStyle}">${escapeHtml(entry.timestampLabel)}</td>
+          <td style="${cellStyle}">${escapeHtml(entry.level)}</td>
+          <td style="${cellStyle}">${escapeHtml(entry.event)}</td>
+          <td style="${cellStyle}">${escapeHtml(entry.awsService)}</td>
+        </tr>`;
+      })
+      .join("");
+
+    const headerStyle =
+      "border:1px solid #000;padding:6px 8px;background:#e5e5e5;font-weight:700;text-align:left;";
+
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+<head>
+  <meta charset="UTF-8" />
+  <!--[if gte mso 9]><xml>
+    <x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+      <x:Name>CMA Logs</x:Name>
+      <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+    </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook>
+  </xml><![endif]-->
+</head>
+<body>
+  <table style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt;">
+    <thead>
+      <tr>
+        <th style="${headerStyle}">Time</th>
+        <th style="${headerStyle}">Level</th>
+        <th style="${headerStyle}">Event</th>
+        <th style="${headerStyle}">AWS Service</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+</body>
+</html>`;
+
+    const blob = new Blob(["﻿" + html], {
+      type: "application/vnd.ms-excel;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cma-logs-${stamp}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
 
   return (
     <div className="space-y-6">
@@ -45,12 +143,24 @@ export function LogsTable() {
         title="Logs"
         subtitle="Filter execution history, inspect service-level events, and export logs."
         action={
-          <Button className="h-11 rounded-xl bg-[#8b6949] px-5 text-white hover:bg-[#78583b]">
+          <Button
+            onClick={handleExportLogs}
+            className="h-11 rounded-xl bg-[#8b6949] px-5 text-white hover:bg-[#78583b]"
+          >
             <Download size={16} />
             Export Logs
           </Button>
         }
       />
+
+      {liveLogs.length > 0 && (
+        <section className="rounded-[1.35rem] border border-[#cfe6d2] bg-[#eef7f0] px-5 py-4 shadow-[0_8px_24px_rgba(40,90,60,0.05)]">
+          <p className="text-sm font-semibold text-[#2f6a3d]">Live scan logs</p>
+          <p className="text-sm text-[#456a4d]">
+            {liveLogs.length} entries from your last scan are shown at the top.
+          </p>
+        </section>
+      )}
 
       <SectionCard contentClassName="space-y-4 px-0 py-0">
         <div className="flex flex-col gap-4 border-b border-[#f0e7da] px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
@@ -111,7 +221,7 @@ export function LogsTable() {
         </div>
 
         <div className="border-t border-[#f0e7da] px-6 py-4 text-sm text-[#7f715f]">
-          Showing 1-{filtered.length} of {filtered.length} log entries
+          Showing {filtered.length} of {allRecords.length} log entries
         </div>
       </SectionCard>
     </div>
