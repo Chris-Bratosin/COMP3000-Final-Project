@@ -341,4 +341,14 @@ async function runS3Scan({ region, credentials, bucketNames }) {
   };
 }
 
-module.exports = { runS3Scan };
+module.exports = {
+  runS3Scan,
+  // Exported for unit tests:
+  checkPublicAccessBlock,
+  checkBucketPolicyPublic,
+  checkBucketAcl,
+  checkEncryption,
+  checkVersioning,
+  checkLogging,
+  resolveBucketRegion,
+};
