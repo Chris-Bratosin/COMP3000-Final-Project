@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
 
@@ -22,7 +22,40 @@ import { SecurityChecksCard } from "@/components/scan-settings/SecurityChecksCar
 
 export function ScanSettingsWorkspace() {
   const router = useRouter();
-  const [settings, setSettings] = useState<ScanSettingsState>(initialScanSettings);
+  const [settings, setSettings] = useState<ScanSettingsState>(() => {
+    if (typeof window === "undefined") return initialScanSettings;
+    try {
+      const saved = localStorage.getItem("scanSettings");
+      if (!saved) return initialScanSettings;
+      const parsed = JSON.parse(saved) as Partial<ScanSettingsState>;
+      return {
+        ...initialScanSettings,
+        ...parsed,
+        accessKeyId: "",
+        secretAccessKey: "",
+        sessionToken: "",
+        assumeRoleArn: "",
+        connectionStatus: "Pending",
+        connectedAccount: "",
+        connectionMessage: initialScanSettings.connectionMessage,
+      };
+    } catch {
+      return initialScanSettings;
+    }
+  });
+  useEffect(() => {
+    localStorage.setItem(
+      "scanSettings",
+      JSON.stringify({
+        ...settings,
+        accessKeyId: "",
+        secretAccessKey: "",
+        sessionToken: "",
+        assumeRoleArn: "",
+      }),
+    );
+  }, [settings]);
+
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [isRunningScan, setIsRunningScan] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
