@@ -75,6 +75,8 @@ export interface DashboardScanData {
     checksErrored: number;
     checksSucceeded: number;
     listError: string | null;
+    scopeLabel: string;
+    scannerLabel: "S3" | "IAM" | "AWS";
   };
 }
 
@@ -85,26 +87,25 @@ function parseBucketNames(raw: string): string[] {
     .filter(Boolean);
 }
 
-export async function runS3Scan(
-  settings: ScanSettingsState,
-): Promise<BackendScanResult> {
-  const region =
-    settings.regionScope === "single-region" && settings.singleRegion
-      ? settings.singleRegion
-      : settings.primaryRegion;
+function credentialsBody(settings: ScanSettingsState, region: string) {
+  return {
+    connectionMethod: settings.connectionMethod,
+    accessKeyId: settings.accessKeyId,
+    secretAccessKey: settings.secretAccessKey,
+    sessionToken: settings.sessionToken,
+    assumeRoleArn: settings.assumeRoleArn,
+    primaryRegion: region,
+  };
+}
 
-  const response = await fetch(`${BACKEND_URL}/api/scan/s3`, {
+async function postScan(
+  endpoint: string,
+  body: Record<string, unknown>,
+): Promise<BackendScanResult> {
+  const response = await fetch(`${BACKEND_URL}${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      connectionMethod: settings.connectionMethod,
-      accessKeyId: settings.accessKeyId,
-      secretAccessKey: settings.secretAccessKey,
-      sessionToken: settings.sessionToken,
-      assumeRoleArn: settings.assumeRoleArn,
-      primaryRegion: region,
-      bucketNames: parseBucketNames(settings.bucketNames),
-    }),
+    body: JSON.stringify(body),
   });
 
   const payload = (await response.json()) as
@@ -113,13 +114,128 @@ export async function runS3Scan(
 
   if (!response.ok || !("ok" in payload) || !payload.ok) {
     const message =
-      "ok" in payload && !payload.ok
-        ? payload.message
-        : "S3 scan failed.";
+      "ok" in payload && !payload.ok ? payload.message : "Scan failed.";
     throw new Error(message);
   }
 
   return payload.scan;
+}
+
+export async function runS3Scan(
+  settings: ScanSettingsState,
+): Promise<BackendScanResult> {
+  const region =
+    settings.regionScope === "single-region" && settings.singleRegion
+      ? settings.singleRegion
+      : settings.primaryRegion;
+  return postScan("/api/scan/s3", {
+    ...credentialsBody(settings, region),
+    bucketNames: parseBucketNames(settings.bucketNames),
+  });
+}
+
+export async function runIamScan(
+  settings: ScanSettingsState,
+): Promise<BackendScanResult> {
+  return postScan("/api/scan/iam", credentialsBody(settings, settings.primaryRegion));
+}
+
+// Categories whose scanners exist in the backend. Other categories in the UI
+// (EC2/Network, Secrets) are still placeholders; ticking those boxes is a no-op
+// until their scanners land.
+const IMPLEMENTED_CATEGORIES = {
+  s3: ["s3-public-bucket", "s3-public-block", "s3-encryption", "s3-policy"],
+  iam: ["iam-root-mfa", "iam-permissive", "iam-unused-keys", "iam-wildcard"],
+} as const;
+
+export function selectedScannerTypes(
+  securityChecks: Record<string, boolean>,
+): { s3: boolean; iam: boolean } {
+  const anyOn = (ids: readonly string[]) => ids.some((id) => securityChecks[id]);
+  return {
+    s3: anyOn(IMPLEMENTED_CATEGORIES.s3),
+    iam: anyOn(IMPLEMENTED_CATEGORIES.iam),
+  };
+}
+
+// One Run Scan click can produce multiple ScanRecord rows on the backend (one
+// per scanner type that was selected). For display in the Reports table we
+// want those to appear as a single merged row, not N rows. Two scans are
+// treated as belonging to the same click if they started within `windowMs` of
+// each other (default 30s). Each cluster is sorted by start time so the merge
+// output keeps a stable order.
+export function clusterScansByTime(
+  scans: BackendScanResult[],
+  windowMs = 30_000,
+): BackendScanResult[][] {
+  if (scans.length === 0) return [];
+  const sorted = [...scans].sort(
+    (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime(),
+  );
+  const clusters: BackendScanResult[][] = [];
+  let current: BackendScanResult[] = [sorted[0]];
+  let clusterAnchor = new Date(sorted[0].startedAt).getTime();
+  for (let i = 1; i < sorted.length; i++) {
+    const t = new Date(sorted[i].startedAt).getTime();
+    if (t - clusterAnchor <= windowMs) {
+      current.push(sorted[i]);
+    } else {
+      clusters.push(current);
+      current = [sorted[i]];
+      clusterAnchor = t;
+    }
+  }
+  clusters.push(current);
+  return clusters;
+}
+
+export function mergeScanResults(
+  results: BackendScanResult[],
+): BackendScanResult {
+  if (results.length === 0) {
+    throw new Error("mergeScanResults requires at least one scan.");
+  }
+  if (results.length === 1) return results[0];
+
+  const findings = results.flatMap((r) => r.findings);
+  const buckets = results.flatMap((r) => r.buckets);
+  const bucketErrors = results.flatMap((r) => r.bucketErrors || []);
+
+  const earliestStart = results
+    .map((r) => r.startedAt)
+    .sort()[0];
+  const latestEnd = results
+    .map((r) => r.completedAt)
+    .sort()
+    .reverse()[0];
+
+  const sumField = (field: keyof BackendScanResult["summary"]) =>
+    results.reduce((acc, r) => acc + (r.summary[field] || 0), 0);
+
+  return {
+    startedAt: earliestStart,
+    completedAt: latestEnd,
+    durationMs:
+      new Date(latestEnd).getTime() - new Date(earliestStart).getTime(),
+    region: results[0].region,
+    bucketSource: results[0].bucketSource,
+    listAttempted: results.some((r) => r.listAttempted),
+    listError: results.find((r) => r.listError)?.listError ?? null,
+    summary: {
+      totalChecks: sumField("totalChecks"),
+      checksDenied: sumField("checksDenied"),
+      checksErrored: sumField("checksErrored"),
+      checksSucceeded: sumField("checksSucceeded"),
+      bucketsScanned: sumField("bucketsScanned"),
+      issuesFound: findings.length,
+      high: findings.filter((f) => f.severity === "high" || f.severity === "critical").length,
+      medium: findings.filter((f) => f.severity === "medium").length,
+      low: findings.filter((f) => f.severity === "low").length,
+    },
+    buckets,
+    bucketErrors,
+    findings,
+  };
 }
 
 function normaliseSeverity(s: BackendFinding["severity"]): SeverityLevel {
@@ -170,6 +286,14 @@ export function mapScanToDashboard(scan: BackendScanResult): DashboardScanData {
     denied > 0 ? `${denied} denied by IAM` : null,
     errored > 0 ? `${errored} errored` : null,
   ].filter(Boolean);
+  const scannerLabel = inferScannerLabel(scan);
+  const bucketsScope =
+    summary.bucketsScanned > 0
+      ? `${summary.bucketsScanned} S3 bucket${summary.bucketsScanned === 1 ? "" : "s"}`
+      : null;
+  const iamScope = scannerLabel === "IAM" || scannerLabel === "AWS" ? "IAM checks" : null;
+  const scopeJoined = [bucketsScope, iamScope].filter(Boolean).join(" and ");
+  const scopeLabel = scopeJoined || "no resources";
   const metrics: Metric[] = [
     {
       label: "Total Checks",
@@ -178,8 +302,8 @@ export function mapScanToDashboard(scan: BackendScanResult): DashboardScanData {
       supportingText: noChecksRan
         ? "No checks could be run"
         : failedParts.length > 0
-          ? `${summary.bucketsScanned} bucket${summary.bucketsScanned === 1 ? "" : "s"} - ${failedParts.join(", ")}`
-          : `Across ${summary.bucketsScanned} S3 bucket${summary.bucketsScanned === 1 ? "" : "s"}`,
+          ? `${scopeLabel} - ${failedParts.join(", ")}`
+          : `Across ${scopeLabel}`,
     },
     {
       label: "Issues Found",
@@ -316,6 +440,8 @@ export function mapScanToDashboard(scan: BackendScanResult): DashboardScanData {
       checksErrored: summary.checksErrored || 0,
       checksSucceeded: succeeded,
       listError: scan.listError ? scan.listError.message : null,
+      scopeLabel,
+      scannerLabel,
     },
   };
 }
@@ -432,7 +558,26 @@ export function mapScanToLogs(scan: BackendScanResult): LogRecord[] {
   return records;
 }
 
+// Returns "S3", "IAM", or "AWS" depending on which scanner(s) produced the
+// result. Used for naming reports and labelling dashboard metadata.
+//   - "AWS"  : merged scan covering both S3 and IAM
+//   - "IAM"  : IAM-only scan (region "global", no buckets)
+//   - "S3"   : S3-only scan (has buckets, only S3 findings)
+export function inferScannerLabel(scan: BackendScanResult): "S3" | "IAM" | "AWS" {
+  const services = new Set(scan.findings.map((f) => f.service));
+  const hasS3Activity = services.has("S3") || (scan.buckets && scan.buckets.length > 0);
+  const hasIamActivity =
+    services.has("IAM") || (scan.region === "global" && (!scan.buckets || scan.buckets.length === 0));
+  if (hasS3Activity && hasIamActivity) return "AWS";
+  if (hasIamActivity) return "IAM";
+  return "S3";
+}
+
 export function mapScanToReport(scan: BackendScanResult): ReportRecord {
+  const label = inferScannerLabel(scan);
+  // IAM scans report region as "global", which reads oddly in a name; drop the
+  // " — region" suffix when the region is global.
+  const suffix = scan.region && scan.region !== "global" ? ` — ${scan.region}` : "";
   return {
     id: "live-scan",
     dateLabel: new Date(scan.completedAt).toLocaleDateString("en-GB", {
@@ -441,7 +586,7 @@ export function mapScanToReport(scan: BackendScanResult): ReportRecord {
       year: "numeric",
     }),
     createdAt: scan.completedAt,
-    name: `S3 Security Scan — ${scan.region}`,
+    name: `${label} Security Scan${suffix}`,
     issues: scan.summary.issuesFound,
     high: scan.summary.high,
     medium: scan.summary.medium,

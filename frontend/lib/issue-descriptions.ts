@@ -19,6 +19,24 @@ export const issueDescriptions: Record<string, string> = {
 
   "s3-server-access-logging-disabled":
     "Server access logging is not enabled, so there is no per-request audit trail for this bucket. If a security incident occurs (credential leak, unauthorised download, ransomware-style mass delete), there is no record of who accessed what and when. The forensic gap can turn a contained incident into an unanswered question.",
+
+  "iam-root-mfa-disabled":
+    "The root user of this AWS account has no MFA device registered. The root user has unrestricted access to every resource and every billing setting in the account, and its credentials cannot be revoked the way an IAM user's can. If the root password leaks and MFA is not enabled, the entire account is compromised. AWS lists root MFA as the single most important IAM control.",
+
+  "iam-password-policy-missing":
+    "The account has no IAM password policy configured. Without one, IAM users with console access can set arbitrarily weak passwords, never rotate them, and reuse old ones. A password policy is the baseline mechanism for enforcing credential hygiene across every human user in the account.",
+
+  "iam-password-policy-weak":
+    "An IAM password policy exists but falls short of widely accepted thresholds (at least 14 characters, all four character classes, and a 90-day rotation window). Weak password policies are routinely cited in compliance findings (CIS, ISO 27001) because they let credential-stuffing and brute-force attacks succeed against accounts that should have been protected.",
+
+  "iam-user-mfa-disabled":
+    "This IAM user has no MFA device registered. If the user's password or access key is ever leaked (in a phishing email, a checked-in commit, a breached third-party service), the attacker can log in or call the API directly. MFA reduces the value of a leaked credential to near-zero by requiring a second factor the attacker does not hold.",
+
+  "iam-access-key-unused":
+    "This active IAM access key has either never been used or has not been used for over 90 days. Long-lived credentials that no one is actively using are a recurring source of breaches: they sit forgotten in old config files, dotfiles, and CI variables, and are rarely rotated. AWS recommends rotating access keys every 90 days and disabling or deleting any key with no recent activity.",
+
+  "iam-user-admin-policy-attached":
+    "This IAM user has the AWS-managed AdministratorAccess policy attached directly to their identity. Direct admin attachment makes a leaked credential catastrophic: any attacker with the user's keys gets full account control with no escalation needed. Best practice is to grant administrative permissions through an IAM role assumed only when needed, or through a group with auditable membership, so that day-to-day credentials carry the minimum permissions required.",
 };
 
 export function getIssueDescription(ruleId: string | undefined): string | null {

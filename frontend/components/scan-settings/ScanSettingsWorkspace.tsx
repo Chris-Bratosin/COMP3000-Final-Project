@@ -13,7 +13,13 @@ import {
   securityCheckOptions,
 } from "@/lib/mock-data";
 import type { ScanSettingsState } from "@/lib/types";
-import { persistScanResult, runS3Scan } from "@/lib/scan";
+import {
+  mergeScanResults,
+  persistScanResult,
+  runIamScan,
+  runS3Scan,
+  selectedScannerTypes,
+} from "@/lib/scan";
 import { loadSettings, saveSettings } from "@/lib/scan-settings-storage";
 import { AwsConnectionCard } from "@/components/scan-settings/AwsConnectionCard";
 import { BottomActionBar } from "@/components/scan-settings/BottomActionBar";
@@ -216,11 +222,24 @@ export function ScanSettingsWorkspace() {
     }));
 
     try {
-      const scan = await runS3Scan(settings);
+      const types = selectedScannerTypes(settings.securityChecks);
+      if (!types.s3 && !types.iam) {
+        throw new Error(
+          "Select at least one S3 or IAM check before running a scan.",
+        );
+      }
+
+      const tasks: Promise<Awaited<ReturnType<typeof runS3Scan>>>[] = [];
+      if (types.s3) tasks.push(runS3Scan(settings));
+      if (types.iam) tasks.push(runIamScan(settings));
+
+      const results = await Promise.all(tasks);
+      const scan = mergeScanResults(results);
       persistScanResult(scan);
+
       setSettings((current) => ({
         ...current,
-        lastSaved: `Scan complete - ${scan.summary.issuesFound} issue(s) across ${scan.summary.bucketsScanned} bucket(s)`,
+        lastSaved: `Scan complete - ${scan.summary.issuesFound} issue(s), ${scan.summary.bucketsScanned} bucket(s)`,
       }));
       router.push("/");
     } catch (error) {
