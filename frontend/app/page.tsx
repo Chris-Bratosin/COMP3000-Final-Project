@@ -103,9 +103,11 @@ export default function DashboardPage() {
             <div className="space-y-1">
               <p className="text-sm font-semibold text-[#2f6a3d]">Live scan results</p>
               <p className="text-sm text-[#456a4d]">
-                {liveData.meta.bucketsScanned} S3 bucket
-                {liveData.meta.bucketsScanned === 1 ? "" : "s"} scanned in{" "}
-                {liveData.meta.region} - completed{" "}
+                {liveData.meta.scopeLabel}
+                {liveData.meta.scannerLabel !== "IAM"
+                  ? ` scanned in ${liveData.meta.region}`
+                  : " scanned"}
+                {" - completed "}
                 {new Date(liveData.meta.completedAt).toLocaleString("en-GB")}
               </p>
               {liveData.meta.checksDenied > 0 && (

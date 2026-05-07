@@ -9,9 +9,11 @@ import { SectionCard } from "@/components/shared/SectionCard";
 import { Button } from "@/components/ui/button";
 import { reportRecords } from "@/lib/mock-data";
 import {
+  clusterScansByTime,
   fetchScanHistory,
   loadScanResult,
   mapScanToReport,
+  mergeScanResults,
 } from "@/lib/scan";
 import type { BackendScanResult } from "@/lib/scan";
 import type { ReportRecord } from "@/lib/types";
@@ -36,10 +38,20 @@ export function ReportsTable() {
 
     fetchScanHistory()
       .then((scans) => {
-        const mapped = scans.map((s, i) => ({
-          report: { ...mapScanToReport(s), id: `scan-${s.completedAt}-${i}` },
-          scan: s,
-        }));
+        // Each Run Scan click can produce two backend records (S3 and IAM).
+        // Cluster scans started within 30s of each other and merge each
+        // cluster so the table shows one row per click.
+        const clusters = clusterScansByTime(scans);
+        const mapped = clusters.map((cluster, i) => {
+          const merged = mergeScanResults(cluster);
+          return {
+            report: {
+              ...mapScanToReport(merged),
+              id: `scan-${merged.completedAt}-${i}`,
+            },
+            scan: merged,
+          };
+        });
         setHistoryReports(mapped.map((m) => m.report));
         setScansById((prev) => {
           const next = { ...prev };
