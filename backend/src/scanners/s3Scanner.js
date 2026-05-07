@@ -10,6 +10,15 @@ const {
   GetBucketLoggingCommand,
 } = require('@aws-sdk/client-s3');
 
+const {
+  safeCall,
+  isAccessDenied,
+  isErrorCode,
+  deniedOutcome,
+  erroredOutcome,
+  makeFinding: baseMakeFinding,
+} = require('./utils');
+
 const PUBLIC_ACL_GROUPS = [
   'http://acs.amazonaws.com/groups/global/AllUsers',
   'http://acs.amazonaws.com/groups/global/AuthenticatedUsers',
@@ -24,50 +33,16 @@ function buildClient({ region, credentials }) {
 }
 
 function makeFinding({ ruleId, title, severity, bucket, region, evidence, remediation }) {
-  return {
-    id: `${ruleId}:${bucket}`,
+  return baseMakeFinding({
     ruleId,
     title,
     severity,
     service: 'S3',
-    region: region || 'unknown',
     resourceId: bucket,
-    evidence: evidence || null,
-    remediation: remediation || '',
-  };
-}
-
-async function safeCall(promise, fallback = null) {
-  try {
-    return await promise;
-  } catch (error) {
-    return { __error: error };
-  }
-}
-
-function isErrorCode(result, ...codes) {
-  return result && result.__error && codes.includes(result.__error.name);
-}
-
-function deniedOutcome(ruleId) {
-  return { __denied: true, ruleId };
-}
-
-function erroredOutcome(ruleId, error) {
-  return {
-    __errored: true,
-    ruleId,
-    errorName: error?.name || 'UnknownError',
-    errorMessage: error?.message || 'Unknown error.',
-  };
-}
-
-function isAccessDenied(result) {
-  return (
-    result &&
-    result.__error &&
-    (result.__error.name === 'AccessDenied' || result.__error.name === 'AccessDeniedException')
-  );
+    region: region || 'unknown',
+    evidence,
+    remediation,
+  });
 }
 
 async function checkPublicAccessBlock(client, bucket, region) {

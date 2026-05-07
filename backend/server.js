@@ -8,6 +8,7 @@ const {
 } = require('@aws-sdk/client-sts');
 const { connectToDatabase } = require('./src/config/database');
 const { runS3Scan } = require('./src/scanners/s3Scanner');
+const { runIamScan } = require('./src/scanners/iamScanner');
 const ScanRecord = require('./src/models/ScanRecord');
 
 const app = express();
@@ -265,6 +266,38 @@ app.post('/api/scan/s3', async (req, res) => {
       await ScanRecord.create(result);
     } catch (dbError) {
       console.warn('[scan] failed to persist scan record:', dbError.message);
+    }
+
+    res.status(200).json({ ok: true, scan: result });
+  } catch (error) {
+    const status = error.statusCode || (error.name === 'AccessDenied' ? 403 : 500);
+    res.status(status).json({
+      ok: false,
+      message: mapAwsConnectionError(error),
+      errorCode: error.name || 'ScanFailed',
+    });
+  }
+});
+
+app.post('/api/scan/iam', async (req, res) => {
+  try {
+    const { credentials, region } = await resolveCredentialsForScan(req.body);
+
+    let accountId = null;
+    try {
+      const stsClient = new STSClient({ region, credentials });
+      const identity = await stsClient.send(new GetCallerIdentityCommand({}));
+      accountId = identity.Account || null;
+    } catch {
+      // Best-effort: account ID is informational, not required for the scan.
+    }
+
+    const result = await runIamScan({ credentials, accountId });
+
+    try {
+      await ScanRecord.create(result);
+    } catch (dbError) {
+      console.warn('[scan] failed to persist IAM scan record:', dbError.message);
     }
 
     res.status(200).json({ ok: true, scan: result });
