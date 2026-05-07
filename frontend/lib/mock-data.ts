@@ -358,9 +358,10 @@ export const aboutStackBadges: StackBadge[] = [
   { id: "react", label: "React", tone: "green" },
   { id: "typescript", label: "TypeScript", tone: "blue" },
   { id: "tailwind", label: "Tailwind CSS", tone: "blue" },
+  { id: "express", label: "Express.js", tone: "green" },
+  { id: "mongodb", label: "MongoDB", tone: "green" },
   { id: "aws-sdk", label: "AWS SDK", tone: "blue" },
   { id: "vercel", label: "Vercel", tone: "navy" },
-  { id: "auth-placeholder", label: "Clerk / Supabase", tone: "green" },
 ];
 
 export const complianceFrameworks: ComplianceFramework[] = [

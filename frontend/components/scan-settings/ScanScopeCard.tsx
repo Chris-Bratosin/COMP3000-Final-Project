@@ -36,14 +36,15 @@ export function ScanScopeCard({
   return (
     <SectionCard
       title="Scan Scope"
-      description="Control how broad and how deep the audit should be."
+      description="Configure the resources included in the current local scan."
       className="h-full"
       contentClassName="space-y-5"
     >
       <LabeledSelect
-        label="Scan Level"
+        label="Scan Level (future scope)"
         value={settings.scanLevel}
         onValueChange={(value) => onValueChange("scanLevel", value as ScanLevel)}
+        disabled
         options={[
           { value: "quick", label: "Quick Scan" },
           { value: "standard", label: "Standard Scan" },
@@ -57,8 +58,8 @@ export function ScanScopeCard({
         onValueChange={(value) => onValueChange("regionScope", value as RegionScope)}
         options={[
           { value: "single-region", label: "Single Region" },
-          { value: "multi-region", label: "Multi Region" },
-          { value: "all-enabled", label: "All Enabled Regions" },
+          { value: "multi-region", label: "Multi Region (future scope)", disabled: true },
+          { value: "all-enabled", label: "All Enabled Regions (future scope)", disabled: true },
         ]}
       />
 
@@ -73,7 +74,7 @@ export function ScanScopeCard({
 
       {settings.regionScope === "multi-region" ? (
         <div className="space-y-3">
-          <FieldLabel label="Regions" />
+          <FieldLabel label="Regions (future scope)" />
           <div className="grid gap-3 rounded-[1.15rem] border border-[#eadfcf] bg-[#fcfaf6] p-4 sm:grid-cols-2">
             {regions.map((region) => {
               const checked = settings.selectedRegions.includes(region.value);
@@ -86,6 +87,7 @@ export function ScanScopeCard({
                   <Checkbox
                     checked={checked}
                     onCheckedChange={(value) => toggleRegion(region.value, Boolean(value))}
+                    disabled
                   />
                   <span>{region.label}</span>
                 </label>
@@ -111,7 +113,7 @@ export function ScanScopeCard({
       </div>
 
       <div className="grid gap-2">
-        <FieldLabel label="Max Findings Per Service" />
+        <FieldLabel label="Max Findings Per Service (future scope)" />
         <Input
           type="number"
           min={1}
@@ -119,22 +121,25 @@ export function ScanScopeCard({
           onChange={(event) =>
             onValueChange("maxFindingsPerService", Number(event.target.value) || 0)
           }
+          disabled
           className="h-11 rounded-xl border-[#e4d8c4] bg-[#fcfaf6]"
         />
       </div>
 
       <div className="space-y-4">
         <SettingsToggleRow
-          title="Include Low Severity Findings"
-          description="Keep informational and low-priority findings in scope."
+          title="Include Low Severity Findings (future scope)"
+          description="The submitted scanner currently returns all S3 and IAM findings."
           checked={settings.includeLowSeverity}
           onCheckedChange={(value) => onValueChange("includeLowSeverity", value)}
+          disabled
         />
         <SettingsToggleRow
-          title="Stop Scan on Error"
-          description="Abort the local run if a service-level check fails."
+          title="Stop Scan on Error (future scope)"
+          description="The current backend records denied or errored checks and completes the scan."
           checked={settings.stopOnError}
           onCheckedChange={(value) => onValueChange("stopOnError", value)}
+          disabled
         />
       </div>
     </SectionCard>
@@ -154,22 +159,24 @@ function LabeledSelect({
   value,
   onValueChange,
   options,
+  disabled = false,
 }: {
   label: string;
   value: string;
   onValueChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
+  options: Array<{ value: string; label: string; disabled?: boolean }>;
+  disabled?: boolean;
 }) {
   return (
     <div className="grid gap-2">
       <FieldLabel label={label} />
-      <Select value={value} onValueChange={onValueChange}>
+      <Select value={value} onValueChange={onValueChange} disabled={disabled}>
         <SelectTrigger className="h-11 rounded-xl border-[#e4d8c4] bg-[#fcfaf6]">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
           {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
+            <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
               {option.label}
             </SelectItem>
           ))}

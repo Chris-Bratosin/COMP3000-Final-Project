@@ -22,15 +22,16 @@ export function ReportSettingsCard({
   return (
     <SectionCard
       title="Report Settings"
-      description="Choose how scan results are generated and stored."
+      description="Review report options reserved for future export customisation."
       className="xl:col-span-2"
       contentClassName="space-y-4"
     >
       <div className="grid gap-4 lg:grid-cols-2">
         <LabeledSelect
-          label="Output Format"
+          label="Output Format (future scope)"
           value={settings.outputFormat}
           onValueChange={(value) => onValueChange("outputFormat", value as OutputFormat)}
+          disabled
           options={[
             { value: "json", label: "JSON" },
             { value: "html", label: "HTML" },
@@ -39,11 +40,12 @@ export function ReportSettingsCard({
         />
 
         <LabeledSelect
-          label="Severity Threshold"
+          label="Severity Threshold (future scope)"
           value={settings.severityThreshold}
           onValueChange={(value) =>
             onValueChange("severityThreshold", value as SeverityThreshold)
           }
+          disabled
           options={[
             { value: "all", label: "All" },
             { value: "medium-and-above", label: "Medium and above" },
@@ -53,38 +55,43 @@ export function ReportSettingsCard({
       </div>
 
       <SettingsToggleRow
-        title="Include Remediation Advice"
-        description="Attach practical fix guidance to each finding."
+        title="Include Remediation Advice (future scope)"
+        description="The current report always includes the scanner remediation text."
         checked={settings.includeRemediationAdvice}
         onCheckedChange={(value) => onValueChange("includeRemediationAdvice", value)}
+        disabled
       />
       <SettingsToggleRow
-        title="Include Evidence"
-        description="Store supporting evidence for each failing control."
+        title="Include Evidence (future scope)"
+        description="The current scanner stores evidence with each persisted finding."
         checked={settings.includeEvidence}
         onCheckedChange={(value) => onValueChange("includeEvidence", value)}
+        disabled
       />
       <SettingsToggleRow
-        title="Save Scan Logs"
-        description="Keep structured logs from the local scan session."
+        title="Save Scan Logs (future scope)"
+        description="Logs are derived from saved scan results in the current prototype."
         checked={settings.saveScanLogs}
         onCheckedChange={(value) => onValueChange("saveScanLogs", value)}
+        disabled
       />
       <SettingsToggleRow
-        title="Email Notifications"
-        description="Send a summary after each local scan completes."
+        title="Email Notifications (future scope)"
+        description="No email provider is configured for the submitted local prototype."
         checked={settings.emailNotifications}
         onCheckedChange={(value) => onValueChange("emailNotifications", value)}
+        disabled
       />
 
       {settings.emailNotifications ? (
         <div className="grid gap-2">
-          <FieldLabel label="Notification Email" />
+          <FieldLabel label="Notification Email (future scope)" />
           <Input
             type="email"
             placeholder="security-team@example.com"
             value={settings.notificationEmail}
             onChange={(event) => onValueChange("notificationEmail", event.target.value)}
+            disabled
             className="h-11 rounded-xl border-[#e4d8c4] bg-[#fcfaf6]"
           />
         </div>
@@ -106,16 +113,18 @@ function LabeledSelect({
   value,
   onValueChange,
   options,
+  disabled = false,
 }: {
   label: string;
   value: string;
   onValueChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
+  disabled?: boolean;
 }) {
   return (
     <div className="grid gap-2">
       <FieldLabel label={label} />
-      <Select value={value} onValueChange={onValueChange}>
+      <Select value={value} onValueChange={onValueChange} disabled={disabled}>
         <SelectTrigger className="h-11 rounded-xl border-[#e4d8c4] bg-[#fcfaf6]">
           <SelectValue />
         </SelectTrigger>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SearchField } from "@/components/shared/SearchField";
@@ -19,10 +19,13 @@ import { logRecords } from "@/lib/mock-data";
 import { loadScanResult, mapScanToLogs } from "@/lib/scan";
 import type { LogRecord } from "@/lib/types";
 
+const pageSize = 5;
+
 export function LogsTable() {
   const [searchQuery, setSearchQuery] = useState("");
   const [levelFilter, setLevelFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const [liveLogs, setLiveLogs] = useState<LogRecord[]>([]);
 
   useEffect(() => {
@@ -54,6 +57,12 @@ export function LogsTable() {
         ),
     [allRecords, levelFilter, searchQuery, serviceFilter],
   );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const visibleLogs = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const startEntry = filtered.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const endEntry = Math.min(safePage * pageSize, filtered.length);
 
   const handleExportLogs = () => {
     if (filtered.length === 0) {
@@ -167,7 +176,10 @@ export function LogsTable() {
           <div className="grid gap-3 sm:grid-cols-2">
             <FilterSelect
               value={levelFilter}
-              onValueChange={setLevelFilter}
+              onValueChange={(value) => {
+                setLevelFilter(value);
+                setCurrentPage(1);
+              }}
               placeholder="All Levels"
               options={[
                 { value: "all", label: "All Levels" },
@@ -178,7 +190,10 @@ export function LogsTable() {
             />
             <FilterSelect
               value={serviceFilter}
-              onValueChange={setServiceFilter}
+              onValueChange={(value) => {
+                setServiceFilter(value);
+                setCurrentPage(1);
+              }}
               placeholder="All Services"
               options={[
                 { value: "all", label: "All Services" },
@@ -189,7 +204,10 @@ export function LogsTable() {
 
           <SearchField
             value={searchQuery}
-            onChange={setSearchQuery}
+            onChange={(value) => {
+              setSearchQuery(value);
+              setCurrentPage(1);
+            }}
             placeholder="Search logs..."
             className="w-full max-w-sm"
           />
@@ -206,7 +224,7 @@ export function LogsTable() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#f0e7da]">
-              {filtered.map((entry) => (
+              {visibleLogs.map((entry) => (
                 <tr key={entry.id}>
                   <td className="px-6 py-4 text-sm text-[#7f715f]">{entry.timestampLabel}</td>
                   <td className="px-6 py-4">
@@ -220,8 +238,39 @@ export function LogsTable() {
           </table>
         </div>
 
-        <div className="border-t border-[#f0e7da] px-6 py-4 text-sm text-[#7f715f]">
-          Showing {filtered.length} of {allRecords.length} log entries
+        <div className="flex flex-col gap-4 border-t border-[#f0e7da] px-6 py-4 text-sm text-[#7f715f] sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            Showing {startEntry}-{endEntry} of {filtered.length} log entries
+            {filtered.length !== allRecords.length ? ` (${allRecords.length} total)` : ""}
+          </p>
+
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Previous log page"
+              className="rounded-xl border-[#dfd2bc] bg-[#fcfaf6] text-[#5c4f40] hover:bg-[#f3ecdf]"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={safePage === 1}
+            >
+              <ChevronLeft size={16} />
+            </Button>
+            <span className="flex h-9 min-w-9 items-center justify-center rounded-xl bg-[#8b6949] px-3 text-sm font-semibold text-white">
+              {safePage}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Next log page"
+              className="rounded-xl border-[#dfd2bc] bg-[#fcfaf6] text-[#5c4f40] hover:bg-[#f3ecdf]"
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              disabled={safePage === totalPages}
+            >
+              <ChevronRight size={16} />
+            </Button>
+          </div>
         </div>
       </SectionCard>
     </div>

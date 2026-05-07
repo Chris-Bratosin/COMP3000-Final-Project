@@ -12,7 +12,7 @@ export function AboutCard() {
     <div className="space-y-6">
       <PageHeader
         title="About CMA"
-        subtitle="A frontend-first AWS misconfiguration auditing interface, designed to grow into a deeper scan and reporting platform."
+        subtitle="A local AWS misconfiguration auditor for S3 and IAM, built for a COMP3000 final-year project."
         action={
           <Button
             asChild
@@ -43,15 +43,16 @@ export function AboutCard() {
                   Cloud Misconfiguration Auditor
                 </h2>
                 <p className="max-w-3xl text-sm leading-6 text-[#7f715f]">
-                  A security-focused interface for configuring AWS audits, reviewing
-                  findings, and preparing reports for future backend integration.
+                  A security-focused tool for running read-only AWS checks, reviewing
+                  findings, and preparing dashboard, report, and log evidence from a
+                  localhost backend.
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
               {aboutStackBadges.map((badge) => (
-                <TechBadge key={badge.id} label={badge.label} />
+                <TechBadge key={badge.id} id={badge.id} label={badge.label} />
               ))}
             </div>
 
@@ -72,13 +73,14 @@ export function AboutCard() {
             <p className="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-[#9c886f]">
               Version
             </p>
-            <p className="mt-1 text-5xl font-semibold tracking-tight text-[#352d24]">0.1.1</p>
+            <p className="mt-1 text-5xl font-semibold tracking-tight text-[#352d24]">0.2.0</p>
           </SectionCard>
 
           <SectionCard className="border-[#d9e4f1] bg-[#edf4fd]">
-            <h3 className="font-semibold text-[#6a9bda]">Authentication placeholder</h3>
+            <h3 className="font-semibold text-[#6a9bda]">Local prototype scope</h3>
             <p className="mt-2 text-sm leading-6 text-[#5e6f87]">
-              Supabase will be used for authentication.
+              CMA is intentionally single-user and localhost-only. AWS credentials are
+              supplied per scan and are not saved by the application.
             </p>
           </SectionCard>
 
