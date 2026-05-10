@@ -38,6 +38,12 @@ const bucketSchema = new mongoose.Schema(
 
 const scanRecordSchema = new mongoose.Schema(
   {
+    scanner: { type: String, enum: ['S3', 'IAM', 'EC2', 'Secrets'], default: null, index: true },
+    // Set by the frontend on every Run Scan click and forwarded to each parallel
+    // scan endpoint. All ScanRecords sharing a runId came from the same click.
+    // Replaces the previous client-side time-window heuristic that grouped scans
+    // started within ~30s of each other.
+    runId: { type: String, default: null, index: true },
     startedAt: { type: Date, required: true },
     completedAt: { type: Date, required: true },
     durationMs: { type: Number, default: 0 },
@@ -54,6 +60,9 @@ const scanRecordSchema = new mongoose.Schema(
       checksErrored: { type: Number, default: 0 },
       checksSucceeded: { type: Number, default: 0 },
       bucketsScanned: { type: Number, default: 0 },
+      bucketsSkippedOutOfScope: { type: Number, default: 0 },
+      regionsScanned: { type: Number, default: 0 },
+      secretsScanned: { type: Number, default: 0 },
       issuesFound: { type: Number, default: 0 },
       high: { type: Number, default: 0 },
       medium: { type: Number, default: 0 },

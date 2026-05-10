@@ -228,7 +228,7 @@ async function listAllBuckets(globalClient) {
   return { buckets: [], error: result.__error };
 }
 
-async function runS3Scan({ region, credentials, bucketNames }) {
+async function runS3Scan({ region, credentials, bucketNames, regionFilter }) {
   const startedAt = new Date();
   // Use us-east-1 as the control-plane region: it's the true S3 global endpoint
   // for ListBuckets / GetBucketLocation. followRegionRedirects then handles
@@ -250,6 +250,18 @@ async function runS3Scan({ region, credentials, bucketNames }) {
     listError = listOutcome.error || null;
   }
 
+  // When the user picks single-region or multi-region scope, only scan buckets
+  // whose resolved location is in that set. all-enabled / no filter scans every
+  // bucket discovered. Explicitly named buckets bypass the region filter — if
+  // the user typed a bucket name, scanning a different region than the scope
+  // would silently drop it, which is surprising. Named lists are treated as
+  // the source of truth.
+  const regionFilterSet =
+    Array.isArray(regionFilter) && regionFilter.length > 0 && explicitBuckets.length === 0
+      ? new Set(regionFilter)
+      : null;
+  let bucketsSkippedOutOfScope = 0;
+
   const findings = [];
   const scannedBuckets = [];
   const bucketErrors = [];
@@ -259,6 +271,10 @@ async function runS3Scan({ region, credentials, bucketNames }) {
 
   for (const bucket of buckets) {
     const bucketRegion = (await resolveBucketRegion(globalClient, bucket)) || region;
+    if (regionFilterSet && !regionFilterSet.has(bucketRegion)) {
+      bucketsSkippedOutOfScope += 1;
+      continue;
+    }
     try {
       const { findings: bucketFindings, denied, errored, totalChecks } = await scanBucket(
         bucket,
@@ -295,6 +311,7 @@ async function runS3Scan({ region, credentials, bucketNames }) {
     checksErrored: totalChecksErrored,
     checksSucceeded: totalChecksAttempted - totalChecksDenied - totalChecksErrored,
     bucketsScanned: scannedBuckets.filter((b) => b.status === 'scanned').length,
+    bucketsSkippedOutOfScope,
     issuesFound: findings.length,
     high: findings.filter((f) => f.severity === 'high').length,
     medium: findings.filter((f) => f.severity === 'medium').length,
@@ -302,6 +319,7 @@ async function runS3Scan({ region, credentials, bucketNames }) {
   };
 
   return {
+    scanner: 'S3',
     startedAt: startedAt.toISOString(),
     completedAt: completedAt.toISOString(),
     durationMs: completedAt.getTime() - startedAt.getTime(),
