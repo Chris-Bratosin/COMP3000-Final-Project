@@ -181,6 +181,7 @@ export const securityCheckOptions: SecurityCheckOption[] = [
   { id: "ec2-broad-ingress", label: "Overly broad ingress rules", recommended: true },
   { id: "secrets-policy", label: "Secrets Manager secret policy review", recommended: true },
   { id: "secrets-access", label: "Weakly scoped secret access", recommended: false },
+  { id: "secrets-rotation", label: "Automatic rotation disabled", recommended: true },
 ];
 
 export const securityCheckCategories: SecurityCheckCategory[] = [
@@ -202,7 +203,7 @@ export const securityCheckCategories: SecurityCheckCategory[] = [
   {
     id: "secrets",
     title: "Secrets",
-    checkIds: ["secrets-policy", "secrets-access"],
+    checkIds: ["secrets-policy", "secrets-access", "secrets-rotation"],
   },
 ];
 
@@ -212,14 +213,14 @@ export const initialScanSettings: ScanSettingsState = {
   secretAccessKey: "",
   sessionToken: "",
   assumeRoleArn: "",
-  primaryRegion: "eu-west-1",
+  primaryRegion: "us-east-1",
   connectionStatus: "Pending",
   connectedAccount: "",
   connectionMessage: "Enter sandbox credentials and use Test Connection to validate them.",
   scanLevel: "standard",
   regionScope: "single-region",
-  singleRegion: "eu-west-1",
-  selectedRegions: ["eu-west-1", "eu-central-1"],
+  singleRegion: "us-east-1",
+  selectedRegions: ["us-east-1", "eu-west-1"],
   bucketNames: "",
   maxFindingsPerService: 50,
   includeLowSeverity: false,
@@ -232,8 +233,6 @@ export const initialScanSettings: ScanSettingsState = {
   includeRemediationAdvice: true,
   includeEvidence: true,
   saveScanLogs: true,
-  emailNotifications: false,
-  notificationEmail: "",
   lastSaved: "Saved locally on 19 February 2026 at 09:18",
 };
 

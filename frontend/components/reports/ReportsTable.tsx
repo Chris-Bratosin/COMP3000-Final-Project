@@ -9,89 +9,76 @@ import { SectionCard } from "@/components/shared/SectionCard";
 import { Button } from "@/components/ui/button";
 import { reportRecords } from "@/lib/mock-data";
 import {
-  clusterScansByTime,
   fetchScanHistory,
+  groupScansByRunId,
   loadScanResult,
   mapScanToReport,
   mergeScanResults,
 } from "@/lib/scan";
 import type { BackendScanResult } from "@/lib/scan";
-import type { ReportRecord } from "@/lib/types";
+import { loadSettings } from "@/lib/scan-settings-storage";
+import { initialScanSettings } from "@/lib/mock-data";
+import type { OutputFormat, ReportRecord } from "@/lib/types";
 
 const pageSize = 5;
 
-export function ReportsTable() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [liveReport, setLiveReport] = useState<ReportRecord | null>(null);
-  const [historyReports, setHistoryReports] = useState<ReportRecord[]>([]);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-  const [scansById, setScansById] = useState<Record<string, BackendScanResult>>({});
+// Slugify the report name for use in download filenames. Strips anything that
+// isn't a letter, digit, dash, or underscore so the resulting filename is
+// safe across Windows / macOS / Linux without quoting.
+function safeFilenameSlug(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || "scan-report";
+}
 
-  useEffect(() => {
-    const scan = loadScanResult();
-    if (scan) {
-      const report = mapScanToReport(scan);
-      setLiveReport(report);
-      setScansById((prev) => ({ ...prev, [report.id]: scan }));
+// Triggers a browser download by anchor click. Used for the JSON export so the
+// file lands in the user's Downloads folder rather than opening a new tab.
+function triggerDownload(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+// JSON export: pretty-printed BackendScanResult, downloaded as <name>.json.
+// We export the raw scan envelope (findings, summary, region, runId, etc.)
+// so a downstream tool can re-process the result without losing fidelity.
+function exportScanAsJson(scan: BackendScanResult, reportName: string): void {
+  const json = JSON.stringify(scan, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  triggerDownload(`${safeFilenameSlug(reportName)}.json`, blob);
+}
+
+// HTML export: opens a printable A4 report in a new tab. The "Save as PDF"
+// button inside the document calls window.print() so the user can save it
+// through the browser's native print-to-PDF flow. Returns false if the new
+// tab was blocked by pop-up settings.
+function exportScanAsHtml(scan: BackendScanResult, reportName: string): boolean {
+  const { findings } = scan;
+
+  const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+  for (const f of findings) {
+    const s = f.severity.toLowerCase();
+    if (s === "critical" || s === "high" || s === "medium" || s === "low") {
+      counts[s as keyof typeof counts]++;
     }
+  }
 
-    fetchScanHistory()
-      .then((scans) => {
-        // Each Run Scan click can produce two backend records (S3 and IAM).
-        // Cluster scans started within 30s of each other and merge each
-        // cluster so the table shows one row per click.
-        const clusters = clusterScansByTime(scans);
-        const mapped = clusters.map((cluster, i) => {
-          const merged = mergeScanResults(cluster);
-          return {
-            report: {
-              ...mapScanToReport(merged),
-              id: `scan-${merged.completedAt}-${i}`,
-            },
-            scan: merged,
-          };
-        });
-        setHistoryReports(mapped.map((m) => m.report));
-        setScansById((prev) => {
-          const next = { ...prev };
-          for (const m of mapped) next[m.report.id] = m.scan;
-          return next;
-        });
-        setHistoryError(null);
-      })
-      .catch((error: Error) => {
-        setHistoryError(error.message);
-      });
-  }, []);
+  const escapeHtml = (s: string) =>
+    String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
 
-  const handleExportReport = (reportId: string) => {
-    const scan = scansById[reportId];
-    if (!scan) {
-      alert("No scan data found for this report.");
-      return;
-    }
-
-    const report = mapScanToReport(scan);
-    const { findings } = scan;
-
-    const counts = { critical: 0, high: 0, medium: 0, low: 0 };
-    for (const f of findings) {
-      const s = f.severity.toLowerCase();
-      if (s === "critical" || s === "high" || s === "medium" || s === "low") {
-        counts[s as keyof typeof counts]++;
-      }
-    }
-
-    const escapeHtml = (s: string) =>
-      String(s)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
-
-    const rowsFormatted = findings.map((f) => `
+  const rowsFormatted = findings.map((f) => `
       <tr>
         <td class="sev"><strong>${escapeHtml(f.severity.charAt(0).toUpperCase() + f.severity.slice(1).toLowerCase())}</strong></td>
         <td>${escapeHtml(f.resourceId)}</td>
@@ -99,7 +86,7 @@ export function ReportsTable() {
         <td>${escapeHtml(f.remediation || "—")}</td>
       </tr>`).join("");
 
-    const html = `<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -139,7 +126,7 @@ export function ReportsTable() {
       <div class="meta">
         <div>Generated: ${escapeHtml(new Date().toLocaleString("en-GB"))}</div>
         <div>Scan region: ${escapeHtml(scan.region)}</div>
-        <div>${escapeHtml(report.name)}</div>
+        <div>${escapeHtml(reportName)}</div>
       </div>
       <h1>AWS Security Audit Report</h1>
       <div class="actions">
@@ -168,17 +155,88 @@ export function ReportsTable() {
 </body>
 </html>`;
 
-    const newWindow = window.open("about:blank", "_blank");
-    if (!newWindow) {
-      alert(
-        "The report could not be opened. Please allow pop-ups for this site and try again.",
-      );
+  const newWindow = window.open("about:blank", "_blank");
+  if (!newWindow) return false;
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  newWindow.location.href = url;
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  return true;
+}
+
+export function ReportsTable() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [liveReport, setLiveReport] = useState<ReportRecord | null>(null);
+  const [historyReports, setHistoryReports] = useState<ReportRecord[]>([]);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [scansById, setScansById] = useState<Record<string, BackendScanResult>>({});
+
+  useEffect(() => {
+    const scan = loadScanResult();
+    if (scan) {
+      const report = mapScanToReport(scan);
+      setLiveReport(report);
+      setScansById((prev) => ({ ...prev, [report.id]: scan }));
+    }
+
+    fetchScanHistory()
+      .then((scans) => {
+        // Each Run Scan click can produce up to four backend records (S3, IAM,
+        // EC2, Secrets). Group by the runId stamped on every record at the
+        // start of the click and merge each group so the table shows one row
+        // per click. Legacy records without a runId fall through as singletons.
+        const clusters = groupScansByRunId(scans);
+        const mapped = clusters.map((cluster, i) => {
+          const merged = mergeScanResults(cluster);
+          return {
+            report: {
+              ...mapScanToReport(merged),
+              id: merged.runId ?? `scan-${merged.completedAt}-${i}`,
+            },
+            scan: merged,
+          };
+        });
+        setHistoryReports(mapped.map((m) => m.report));
+        setScansById((prev) => {
+          const next = { ...prev };
+          for (const m of mapped) next[m.report.id] = m.scan;
+          return next;
+        });
+        setHistoryError(null);
+      })
+      .catch((error: Error) => {
+        setHistoryError(error.message);
+      });
+  }, []);
+
+  const handleExportReport = (reportId: string) => {
+    const scan = scansById[reportId];
+    if (!scan) {
+      alert("No scan data found for this report.");
       return;
     }
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    newWindow.location.href = url;
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+
+    const report = mapScanToReport(scan);
+    // Use whatever Output Format the user saved; fall back to HTML if no
+    // settings have been saved yet (first visit, fresh localStorage).
+    const settings = loadSettings(initialScanSettings);
+    const format: OutputFormat = settings.outputFormat || "html";
+
+    const wantsHtml = format === "html" || format === "json-html";
+    const wantsJson = format === "json" || format === "json-html";
+
+    if (wantsJson) {
+      exportScanAsJson(scan, report.name);
+    }
+    if (wantsHtml) {
+      const opened = exportScanAsHtml(scan, report.name);
+      if (!opened) {
+        alert(
+          "The HTML report could not be opened. Please allow pop-ups for this site and try again.",
+        );
+      }
+    }
   };
 
   const allReports = useMemo(() => {

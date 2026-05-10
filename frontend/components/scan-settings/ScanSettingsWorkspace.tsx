@@ -15,9 +15,12 @@ import {
 import type { ScanSettingsState } from "@/lib/types";
 import {
   mergeScanResults,
+  newRunId,
   persistScanResult,
+  runEc2Scan,
   runIamScan,
   runS3Scan,
+  runSecretsScan,
   selectedScannerTypes,
 } from "@/lib/scan";
 import { loadSettings, saveSettings } from "@/lib/scan-settings-storage";
@@ -223,15 +226,20 @@ export function ScanSettingsWorkspace() {
 
     try {
       const types = selectedScannerTypes(settings.securityChecks);
-      if (!types.s3 && !types.iam) {
+      if (!types.s3 && !types.iam && !types.ec2 && !types.secrets) {
         throw new Error(
-          "Select at least one S3 or IAM check before running a scan.",
+          "Select at least one S3, IAM, EC2, or Secrets check before running a scan.",
         );
       }
 
+      // One runId per click so the backend can stamp every parallel ScanRecord
+      // with the same identifier. The Reports page later groups by this id.
+      const runId = newRunId();
       const tasks: Promise<Awaited<ReturnType<typeof runS3Scan>>>[] = [];
-      if (types.s3) tasks.push(runS3Scan(settings));
-      if (types.iam) tasks.push(runIamScan(settings));
+      if (types.s3) tasks.push(runS3Scan(settings, runId));
+      if (types.iam) tasks.push(runIamScan(settings, runId));
+      if (types.ec2) tasks.push(runEc2Scan(settings, runId));
+      if (types.secrets) tasks.push(runSecretsScan(settings, runId));
 
       const results = await Promise.all(tasks);
       const scan = mergeScanResults(results);

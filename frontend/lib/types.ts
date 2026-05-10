@@ -107,8 +107,6 @@ export interface ScanSettingsState {
   includeRemediationAdvice: boolean;
   includeEvidence: boolean;
   saveScanLogs: boolean;
-  emailNotifications: boolean;
-  notificationEmail: string;
   lastSaved: string;
 }
 

@@ -1,4 +1,3 @@
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -22,16 +21,15 @@ export function ReportSettingsCard({
   return (
     <SectionCard
       title="Report Settings"
-      description="Review report options reserved for future export customisation."
+      description="Control how scan results are filtered and exported."
       className="xl:col-span-2"
       contentClassName="space-y-4"
     >
       <div className="grid gap-4 lg:grid-cols-2">
         <LabeledSelect
-          label="Output Format (future scope)"
+          label="Output Format"
           value={settings.outputFormat}
           onValueChange={(value) => onValueChange("outputFormat", value as OutputFormat)}
-          disabled
           options={[
             { value: "json", label: "JSON" },
             { value: "html", label: "HTML" },
@@ -40,12 +38,11 @@ export function ReportSettingsCard({
         />
 
         <LabeledSelect
-          label="Severity Threshold (future scope)"
+          label="Severity Threshold"
           value={settings.severityThreshold}
           onValueChange={(value) =>
             onValueChange("severityThreshold", value as SeverityThreshold)
           }
-          disabled
           options={[
             { value: "all", label: "All" },
             { value: "medium-and-above", label: "Medium and above" },
@@ -55,47 +52,23 @@ export function ReportSettingsCard({
       </div>
 
       <SettingsToggleRow
-        title="Include Remediation Advice (future scope)"
-        description="The current report always includes the scanner remediation text."
+        title="Include Remediation Advice"
+        description="When disabled, persisted findings are returned without the remediation text."
         checked={settings.includeRemediationAdvice}
         onCheckedChange={(value) => onValueChange("includeRemediationAdvice", value)}
-        disabled
       />
       <SettingsToggleRow
-        title="Include Evidence (future scope)"
-        description="The current scanner stores evidence with each persisted finding."
+        title="Include Evidence"
+        description="When disabled, the evidence object on each finding is stripped from the response."
         checked={settings.includeEvidence}
         onCheckedChange={(value) => onValueChange("includeEvidence", value)}
-        disabled
       />
       <SettingsToggleRow
-        title="Save Scan Logs (future scope)"
-        description="Logs are derived from saved scan results in the current prototype."
+        title="Save Scan Logs"
+        description="When enabled, each scan is persisted to the history database. Disable to run an ad-hoc scan without writing it to the report history."
         checked={settings.saveScanLogs}
         onCheckedChange={(value) => onValueChange("saveScanLogs", value)}
-        disabled
       />
-      <SettingsToggleRow
-        title="Email Notifications (future scope)"
-        description="No email provider is configured for the submitted local prototype."
-        checked={settings.emailNotifications}
-        onCheckedChange={(value) => onValueChange("emailNotifications", value)}
-        disabled
-      />
-
-      {settings.emailNotifications ? (
-        <div className="grid gap-2">
-          <FieldLabel label="Notification Email (future scope)" />
-          <Input
-            type="email"
-            placeholder="security-team@example.com"
-            value={settings.notificationEmail}
-            onChange={(event) => onValueChange("notificationEmail", event.target.value)}
-            disabled
-            className="h-11 rounded-xl border-[#e4d8c4] bg-[#fcfaf6]"
-          />
-        </div>
-      ) : null}
     </SectionCard>
   );
 }

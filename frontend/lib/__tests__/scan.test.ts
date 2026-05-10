@@ -1,10 +1,11 @@
 import {
-  clusterScansByTime,
+  groupScansByRunId,
   inferScannerLabel,
   mapScanToDashboard,
   mapScanToLogs,
   mapScanToReport,
   mergeScanResults,
+  newRunId,
   selectedScannerTypes,
   type BackendFinding,
   type BackendScanResult,
@@ -276,13 +277,34 @@ describe("selectedScannerTypes", () => {
     expect(result.iam).toBe(false);
   });
 
-  it("ignores checkbox ids from unimplemented categories (EC2, Secrets)", () => {
+  it("returns ec2=true when any EC2 checkbox is on", () => {
     const result = selectedScannerTypes({
       "ec2-public-sg": true,
-      "secrets-policy": true,
+      "ec2-risky-ports": false,
+      "ec2-broad-ingress": false,
     });
+    expect(result.ec2).toBe(true);
     expect(result.s3).toBe(false);
     expect(result.iam).toBe(false);
+  });
+
+  it("returns secrets=true when any Secrets checkbox is on", () => {
+    const result = selectedScannerTypes({
+      "secrets-policy": true,
+      "secrets-access": false,
+      "secrets-rotation": false,
+    });
+    expect(result.secrets).toBe(true);
+    expect(result.s3).toBe(false);
+    expect(result.iam).toBe(false);
+    expect(result.ec2).toBe(false);
+  });
+
+  it("returns secrets=true when only the rotation checkbox is on", () => {
+    const result = selectedScannerTypes({
+      "secrets-rotation": true,
+    });
+    expect(result.secrets).toBe(true);
   });
 });
 
@@ -403,55 +425,143 @@ describe("inferScannerLabel", () => {
     });
     expect(inferScannerLabel(scan)).toBe("S3");
   });
+
+  it("prefers the explicit scanner field on the envelope", () => {
+    const scan = makeScan({
+      scanner: "EC2",
+      buckets: [],
+      findings: [makeFinding({ service: "EC2", id: "ec2:sg-1", resourceId: "sg-1" })],
+    });
+    expect(inferScannerLabel(scan)).toBe("EC2");
+  });
+
+  it("returns AWS when an EC2 scan is merged with another scanner", () => {
+    const scan = makeScan({
+      scanner: "AWS",
+      buckets: [{ name: "b1", region: "eu-west-1", status: "scanned" }],
+      findings: [
+        makeFinding({ service: "S3", id: "s:b" }),
+        makeFinding({ service: "EC2", id: "e:sg", resourceId: "sg-1" }),
+      ],
+    });
+    expect(inferScannerLabel(scan)).toBe("AWS");
+  });
+
+  it("returns Secrets when the envelope tags it explicitly", () => {
+    const scan = makeScan({
+      scanner: "Secrets",
+      buckets: [],
+      findings: [
+        makeFinding({ service: "SecretsManager", id: "sm:1", resourceId: "db-creds" }),
+      ],
+    });
+    expect(inferScannerLabel(scan)).toBe("Secrets");
+  });
+
+  it("infers Secrets from SecretsManager service findings on legacy rows", () => {
+    const scan = makeScan({
+      scanner: undefined,
+      buckets: [],
+      findings: [
+        makeFinding({ service: "SecretsManager", id: "sm:1", resourceId: "api-key" }),
+      ],
+    });
+    expect(inferScannerLabel(scan)).toBe("Secrets");
+  });
+
+  it("returns AWS when Secrets is merged with another scanner", () => {
+    const scan = makeScan({
+      scanner: undefined,
+      buckets: [{ name: "b1", region: "eu-west-1", status: "scanned" }],
+      findings: [
+        makeFinding({ service: "S3", id: "s:b" }),
+        makeFinding({ service: "SecretsManager", id: "sm:1", resourceId: "k" }),
+      ],
+    });
+    expect(inferScannerLabel(scan)).toBe("AWS");
+  });
 });
 
-describe("clusterScansByTime", () => {
-  function makeScanAt(startedAt: string, completedAt = startedAt): BackendScanResult {
-    return makeScan({ startedAt, completedAt });
+describe("groupScansByRunId", () => {
+  function makeScanWithRun(runId: string | null, startedAt: string): BackendScanResult {
+    return makeScan({ runId, startedAt, completedAt: startedAt });
   }
 
   it("returns an empty list when given no scans", () => {
-    expect(clusterScansByTime([])).toEqual([]);
+    expect(groupScansByRunId([])).toEqual([]);
   });
 
-  it("groups two scans started 1 second apart into the same cluster", () => {
-    const a = makeScanAt("2026-05-07T12:00:00.000Z");
-    const b = makeScanAt("2026-05-07T12:00:01.000Z");
-    const clusters = clusterScansByTime([a, b]);
+  it("groups every scan sharing a runId into one cluster", () => {
+    const a = makeScanWithRun("run-1", "2026-05-07T12:00:00.000Z");
+    const b = makeScanWithRun("run-1", "2026-05-07T12:00:02.000Z");
+    const c = makeScanWithRun("run-1", "2026-05-07T12:00:05.000Z");
+    const clusters = groupScansByRunId([a, b, c]);
     expect(clusters.length).toBe(1);
-    expect(clusters[0].length).toBe(2);
+    expect(clusters[0].length).toBe(3);
   });
 
-  it("splits scans more than the window apart into separate clusters", () => {
-    const a = makeScanAt("2026-05-07T12:00:00.000Z");
-    const b = makeScanAt("2026-05-07T12:05:00.000Z"); // 5 minutes later
-    const clusters = clusterScansByTime([a, b]);
+  it("splits scans with different runIds into separate clusters", () => {
+    const a = makeScanWithRun("run-1", "2026-05-07T12:00:00.000Z");
+    const b = makeScanWithRun("run-2", "2026-05-07T12:00:01.000Z");
+    const clusters = groupScansByRunId([a, b]);
     expect(clusters.length).toBe(2);
-    expect(clusters[0].length).toBe(1);
-    expect(clusters[1].length).toBe(1);
+    expect(clusters[0][0].runId).toBe("run-1");
+    expect(clusters[1][0].runId).toBe("run-2");
   });
 
-  it("handles scans arriving out of order by sorting before clustering", () => {
-    const a = makeScanAt("2026-05-07T12:00:00.000Z");
-    const b = makeScanAt("2026-05-07T12:00:02.000Z");
-    const c = makeScanAt("2026-05-07T12:30:00.000Z");
-    // Pass them shuffled.
-    const clusters = clusterScansByTime([c, a, b]);
+  it("does NOT merge scans started seconds apart if their runIds differ", () => {
+    // The whole point of switching off the time-window heuristic: two scans
+    // that happen to start near each other but were initiated by separate
+    // clicks must stay separate.
+    const a = makeScanWithRun("run-1", "2026-05-07T12:00:00.000Z");
+    const b = makeScanWithRun("run-2", "2026-05-07T12:00:01.000Z");
+    const clusters = groupScansByRunId([a, b]);
     expect(clusters.length).toBe(2);
-    expect(clusters[0].map((s) => s.startedAt)).toEqual([
-      "2026-05-07T12:00:00.000Z",
-      "2026-05-07T12:00:02.000Z",
-    ]);
-    expect(clusters[1].map((s) => s.startedAt)).toEqual([
-      "2026-05-07T12:30:00.000Z",
-    ]);
   });
 
-  it("respects a custom window when provided", () => {
-    const a = makeScanAt("2026-05-07T12:00:00.000Z");
-    const b = makeScanAt("2026-05-07T12:00:05.000Z"); // 5s later
-    expect(clusterScansByTime([a, b], 3_000).length).toBe(2);
-    expect(clusterScansByTime([a, b], 10_000).length).toBe(1);
+  it("treats legacy null-runId scans as singletons each", () => {
+    const a = makeScanWithRun(null, "2026-05-07T12:00:00.000Z");
+    const b = makeScanWithRun(null, "2026-05-07T12:00:02.000Z");
+    const clusters = groupScansByRunId([a, b]);
+    expect(clusters.length).toBe(2);
+  });
+
+  it("orders clusters by earliest start time across the cluster", () => {
+    const later = makeScanWithRun("run-2", "2026-05-07T13:00:00.000Z");
+    const earlierA = makeScanWithRun("run-1", "2026-05-07T12:00:00.000Z");
+    const earlierB = makeScanWithRun("run-1", "2026-05-07T12:00:05.000Z");
+    const clusters = groupScansByRunId([later, earlierA, earlierB]);
+    expect(clusters[0][0].runId).toBe("run-1");
+    expect(clusters[1][0].runId).toBe("run-2");
+  });
+});
+
+describe("newRunId", () => {
+  it("returns a string identifier", () => {
+    const id = newRunId();
+    expect(typeof id).toBe("string");
+    expect(id.length).toBeGreaterThan(8);
+  });
+
+  it("returns distinct values across calls", () => {
+    const a = newRunId();
+    const b = newRunId();
+    expect(a).not.toBe(b);
+  });
+});
+
+describe("mergeScanResults runId handling", () => {
+  it("propagates the shared runId onto the merged envelope", () => {
+    const a = makeScan({ runId: "run-xyz", scanner: "S3" });
+    const b = makeScan({ runId: "run-xyz", scanner: "IAM", region: "global" });
+    const merged = mergeScanResults([a, b]);
+    expect(merged.runId).toBe("run-xyz");
+  });
+
+  it("falls back to null when no scan in the cluster carried a runId", () => {
+    const a = makeScan({ runId: null, scanner: "S3" });
+    const merged = mergeScanResults([a, makeScan({ runId: null })]);
+    expect(merged.runId).toBeNull();
   });
 });
 

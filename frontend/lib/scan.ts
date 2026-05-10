@@ -29,6 +29,11 @@ export interface BackendFinding {
 }
 
 export interface BackendScanResult {
+  scanner?: "S3" | "IAM" | "EC2" | "Secrets" | "AWS";
+  // Set by the frontend on every Run Scan click and round-tripped through the
+  // backend. All scans sharing a runId came from the same click. Optional
+  // because legacy ScanRecords persisted before this change have no runId.
+  runId?: string | null;
   startedAt: string;
   completedAt: string;
   durationMs: number;
@@ -42,6 +47,7 @@ export interface BackendScanResult {
     checksErrored?: number;
     checksSucceeded?: number;
     bucketsScanned: number;
+    bucketsSkippedOutOfScope?: number;
     issuesFound: number;
     high: number;
     medium: number;
@@ -76,7 +82,7 @@ export interface DashboardScanData {
     checksSucceeded: number;
     listError: string | null;
     scopeLabel: string;
-    scannerLabel: "S3" | "IAM" | "AWS";
+    scannerLabel: "S3" | "IAM" | "EC2" | "Secrets" | "AWS";
   };
 }
 
@@ -95,7 +101,25 @@ function credentialsBody(settings: ScanSettingsState, region: string) {
     sessionToken: settings.sessionToken,
     assumeRoleArn: settings.assumeRoleArn,
     primaryRegion: region,
+    severityThreshold: settings.severityThreshold,
+    includeEvidence: settings.includeEvidence,
+    includeRemediationAdvice: settings.includeRemediationAdvice,
+    // When false the backend runs the scan but skips persisting to ScanRecord,
+    // so the run never appears in the Reports table or scan history.
+    saveScanLogs: settings.saveScanLogs,
   };
+}
+
+// Translates the user's regionScope choice into a concrete bucket-region
+// allowlist for the S3 backend. all-enabled returns undefined (no filter).
+function regionFilterFor(settings: ScanSettingsState): string[] | undefined {
+  if (settings.regionScope === "single-region" && settings.singleRegion) {
+    return [settings.singleRegion];
+  }
+  if (settings.regionScope === "multi-region" && settings.selectedRegions.length > 0) {
+    return settings.selectedRegions;
+  }
+  return undefined;
 }
 
 async function postScan(
@@ -123,6 +147,7 @@ async function postScan(
 
 export async function runS3Scan(
   settings: ScanSettingsState,
+  runId?: string,
 ): Promise<BackendScanResult> {
   const region =
     settings.regionScope === "single-region" && settings.singleRegion
@@ -131,61 +156,115 @@ export async function runS3Scan(
   return postScan("/api/scan/s3", {
     ...credentialsBody(settings, region),
     bucketNames: parseBucketNames(settings.bucketNames),
+    regionFilter: regionFilterFor(settings),
+    runId,
   });
 }
 
 export async function runIamScan(
   settings: ScanSettingsState,
+  runId?: string,
 ): Promise<BackendScanResult> {
-  return postScan("/api/scan/iam", credentialsBody(settings, settings.primaryRegion));
+  return postScan("/api/scan/iam", {
+    ...credentialsBody(settings, settings.primaryRegion),
+    runId,
+  });
 }
 
-// Categories whose scanners exist in the backend. Other categories in the UI
-// (EC2/Network, Secrets) are still placeholders; ticking those boxes is a no-op
-// until their scanners land.
+export async function runEc2Scan(
+  settings: ScanSettingsState,
+  runId?: string,
+): Promise<BackendScanResult> {
+  // EC2 is per-region. all-enabled sends an empty array so the backend can
+  // expand it via DescribeRegions; otherwise we forward the user's selection.
+  const regions = regionFilterFor(settings) ?? [];
+  return postScan("/api/scan/ec2", {
+    ...credentialsBody(settings, settings.primaryRegion),
+    regions,
+    runId,
+  });
+}
+
+export async function runSecretsScan(
+  settings: ScanSettingsState,
+  runId?: string,
+): Promise<BackendScanResult> {
+  // Same per-region model as EC2: empty array tells the backend to expand
+  // via DescribeRegions, otherwise it scans only the selected regions.
+  const regions = regionFilterFor(settings) ?? [];
+  return postScan("/api/scan/secrets", {
+    ...credentialsBody(settings, settings.primaryRegion),
+    regions,
+    runId,
+  });
+}
+
+// Generates a per-click identifier shared across the parallel scanner POSTs.
+// Uses the platform's crypto.randomUUID when available (modern browsers, Node
+// 19+) and falls back to a timestamp-plus-random string otherwise so the
+// frontend never needs to bring in an extra UUID dependency.
+export function newRunId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+// Categories whose scanners exist in the backend. Each entry is the set of
+// checkbox IDs that, when any are ticked, dispatches that scanner.
 const IMPLEMENTED_CATEGORIES = {
   s3: ["s3-public-bucket", "s3-public-block", "s3-encryption", "s3-policy"],
   iam: ["iam-root-mfa", "iam-permissive", "iam-unused-keys", "iam-wildcard"],
+  ec2: ["ec2-public-sg", "ec2-risky-ports", "ec2-broad-ingress"],
+  secrets: ["secrets-policy", "secrets-access", "secrets-rotation"],
 } as const;
 
 export function selectedScannerTypes(
   securityChecks: Record<string, boolean>,
-): { s3: boolean; iam: boolean } {
+): { s3: boolean; iam: boolean; ec2: boolean; secrets: boolean } {
   const anyOn = (ids: readonly string[]) => ids.some((id) => securityChecks[id]);
   return {
     s3: anyOn(IMPLEMENTED_CATEGORIES.s3),
     iam: anyOn(IMPLEMENTED_CATEGORIES.iam),
+    ec2: anyOn(IMPLEMENTED_CATEGORIES.ec2),
+    secrets: anyOn(IMPLEMENTED_CATEGORIES.secrets),
   };
 }
 
 // One Run Scan click can produce multiple ScanRecord rows on the backend (one
 // per scanner type that was selected). For display in the Reports table we
-// want those to appear as a single merged row, not N rows. Two scans are
-// treated as belonging to the same click if they started within `windowMs` of
-// each other (default 30s). Each cluster is sorted by start time so the merge
-// output keeps a stable order.
-export function clusterScansByTime(
+// want those to appear as a single merged row, not N rows. Group by the runId
+// the frontend stamped on every parallel scanner POST — this is deterministic
+// and replaces the older time-window heuristic.
+//
+// Legacy ScanRecords persisted before runId existed have null runId; each of
+// those becomes its own single-element cluster (we can't truthfully tell which
+// historical click they belonged to, so we don't try to guess).
+export function groupScansByRunId(
   scans: BackendScanResult[],
-  windowMs = 30_000,
 ): BackendScanResult[][] {
   if (scans.length === 0) return [];
-  const sorted = [...scans].sort(
-    (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime(),
-  );
-  const clusters: BackendScanResult[][] = [];
-  let current: BackendScanResult[] = [sorted[0]];
-  let clusterAnchor = new Date(sorted[0].startedAt).getTime();
-  for (let i = 1; i < sorted.length; i++) {
-    const t = new Date(sorted[i].startedAt).getTime();
-    if (t - clusterAnchor <= windowMs) {
-      current.push(sorted[i]);
+  const grouped = new Map<string, BackendScanResult[]>();
+  const ungrouped: BackendScanResult[] = [];
+  for (const scan of scans) {
+    if (scan.runId) {
+      const existing = grouped.get(scan.runId);
+      if (existing) existing.push(scan);
+      else grouped.set(scan.runId, [scan]);
     } else {
-      clusters.push(current);
-      current = [sorted[i]];
-      clusterAnchor = t;
+      ungrouped.push(scan);
     }
   }
-  clusters.push(current);
+  const clusters: BackendScanResult[][] = [];
+  for (const group of grouped.values()) clusters.push(group);
+  for (const scan of ungrouped) clusters.push([scan]);
+  // Order clusters by their earliest start time so the table reads
+  // chronologically regardless of insertion order.
+  clusters.sort((a, b) => {
+    const aStart = Math.min(...a.map((s) => new Date(s.startedAt).getTime()));
+    const bStart = Math.min(...b.map((s) => new Date(s.startedAt).getTime()));
+    return aStart - bStart;
+  });
   return clusters;
 }
 
@@ -210,9 +289,28 @@ export function mergeScanResults(
     .reverse()[0];
 
   const sumField = (field: keyof BackendScanResult["summary"]) =>
-    results.reduce((acc, r) => acc + (r.summary[field] || 0), 0);
+    results.reduce((acc, r) => acc + (Number(r.summary[field]) || 0), 0);
+
+  const distinctScanners = new Set(
+    results
+      .map((r) => r.scanner)
+      .filter((s): s is "S3" | "IAM" | "EC2" | "Secrets" | "AWS" => Boolean(s)),
+  );
+  const mergedScanner: "S3" | "IAM" | "EC2" | "Secrets" | "AWS" | undefined =
+    distinctScanners.size === 0
+      ? undefined
+      : distinctScanners.size === 1
+        ? (Array.from(distinctScanners)[0] as "S3" | "IAM" | "EC2" | "Secrets" | "AWS")
+        : "AWS";
+
+  // Within a cluster every scan shares the same runId (that is the cluster
+  // criterion). Picking the first non-null value keeps us correct even if
+  // legacy null-runId rows ever sneak in.
+  const mergedRunId = results.find((r) => r.runId)?.runId ?? null;
 
   return {
+    scanner: mergedScanner,
+    runId: mergedRunId,
     startedAt: earliestStart,
     completedAt: latestEnd,
     durationMs:
@@ -227,6 +325,7 @@ export function mergeScanResults(
       checksErrored: sumField("checksErrored"),
       checksSucceeded: sumField("checksSucceeded"),
       bucketsScanned: sumField("bucketsScanned"),
+      bucketsSkippedOutOfScope: sumField("bucketsSkippedOutOfScope"),
       issuesFound: findings.length,
       high: findings.filter((f) => f.severity === "high" || f.severity === "critical").length,
       medium: findings.filter((f) => f.severity === "medium").length,
@@ -264,11 +363,16 @@ function gradeForScore(score: number): string {
   return "F";
 }
 
+// Status text is aligned 1:1 with the grade thresholds above so the two never
+// disagree (e.g. an old version graded a 78 as C but called the posture
+// "Healthy", which read as a contradiction in the UI).
 function statusForScore(score: number): string {
   if (score >= 90) return "Excellent posture";
-  if (score >= 75) return "Healthy posture";
+  if (score >= 80) return "Healthy posture";
+  if (score >= 70) return "Acceptable posture";
   if (score >= 60) return "Needs attention";
-  return "Action required";
+  if (score >= 50) return "Action required";
+  return "Critical risk";
 }
 
 export function mapScanToDashboard(scan: BackendScanResult): DashboardScanData {
@@ -558,17 +662,35 @@ export function mapScanToLogs(scan: BackendScanResult): LogRecord[] {
   return records;
 }
 
-// Returns "S3", "IAM", or "AWS" depending on which scanner(s) produced the
-// result. Used for naming reports and labelling dashboard metadata.
-//   - "AWS"  : merged scan covering both S3 and IAM
-//   - "IAM"  : IAM-only scan (region "global", no buckets)
-//   - "S3"   : S3-only scan (has buckets, only S3 findings)
-export function inferScannerLabel(scan: BackendScanResult): "S3" | "IAM" | "AWS" {
+// Returns "S3", "IAM", "EC2", "Secrets", or "AWS" depending on which scanner(s)
+// produced the result. Used for naming reports and labelling dashboard metadata.
+//   - "AWS"     : merged scan covering more than one scanner type
+//   - "Secrets" : Secrets Manager only (SecretsManager service findings)
+//   - "EC2"     : EC2-only scan
+//   - "IAM"     : IAM-only scan (region "global", no buckets)
+//   - "S3"      : S3-only scan (has buckets, only S3 findings)
+// Newer scans carry the scanner type explicitly on the envelope; older history
+// rows don't, so we keep the heuristic as a fallback.
+export function inferScannerLabel(scan: BackendScanResult): "S3" | "IAM" | "EC2" | "Secrets" | "AWS" {
+  if (
+    scan.scanner === "S3" ||
+    scan.scanner === "IAM" ||
+    scan.scanner === "EC2" ||
+    scan.scanner === "Secrets" ||
+    scan.scanner === "AWS"
+  ) {
+    return scan.scanner;
+  }
   const services = new Set(scan.findings.map((f) => f.service));
   const hasS3Activity = services.has("S3") || (scan.buckets && scan.buckets.length > 0);
   const hasIamActivity =
     services.has("IAM") || (scan.region === "global" && (!scan.buckets || scan.buckets.length === 0));
-  if (hasS3Activity && hasIamActivity) return "AWS";
+  const hasEc2Activity = services.has("EC2");
+  const hasSecretsActivity = services.has("SecretsManager");
+  const activeCount = [hasS3Activity, hasIamActivity, hasEc2Activity, hasSecretsActivity].filter(Boolean).length;
+  if (activeCount > 1) return "AWS";
+  if (hasSecretsActivity) return "Secrets";
+  if (hasEc2Activity) return "EC2";
   if (hasIamActivity) return "IAM";
   return "S3";
 }

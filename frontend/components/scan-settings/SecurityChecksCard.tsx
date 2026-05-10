@@ -9,7 +9,7 @@ import type {
 
 // Categories whose scanners are wired up on the backend. Anything not in this
 // set is rendered with a "Not yet implemented" badge and disabled checkboxes.
-const IMPLEMENTED_CATEGORY_IDS = new Set(["s3", "iam"]);
+const IMPLEMENTED_CATEGORY_IDS = new Set(["s3", "iam", "network", "secrets"]);
 
 interface SecurityChecksCardProps {
   categories: SecurityCheckCategory[];
