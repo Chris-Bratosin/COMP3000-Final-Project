@@ -1,5 +1,17 @@
 'use strict';
 
+// Unit tests for the Secrets Manager scanner.
+//
+// Three layers of coverage:
+//   - isDefaultKmsKey: every shape AWS uses to express "default key" (null,
+//     empty, bare alias, alias ARN form) plus negative cases.
+//   - findPublicStatements: each wildcard-principal form (`"*"`, `{ AWS: "*" }`,
+//     wildcard inside an array), Deny-statement exclusion, single-statement
+//     vs. array-statement shapes.
+//   - scanSecretsInRegion: integration-style with the fake client — denied
+//     listing, network errors, no secrets, multi-secret runs, and resource
+//     policy capture. Run with `node --test`.
+
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 

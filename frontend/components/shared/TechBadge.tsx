@@ -7,7 +7,6 @@ import {
   SiReact,
   SiTailwindcss,
   SiTypescript,
-  SiVercel,
 } from "react-icons/si";
 
 import { cn } from "@/lib/utils";
@@ -20,7 +19,6 @@ const stackIcons: Record<string, IconType> = {
   express: SiExpress,
   mongodb: SiMongodb,
   "aws-sdk": FaAws,
-  vercel: SiVercel,
 };
 
 interface TechBadgeProps {

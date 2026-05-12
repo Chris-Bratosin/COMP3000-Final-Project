@@ -12,7 +12,7 @@ export function AboutCard() {
     <div className="space-y-6">
       <PageHeader
         title="About CMA"
-        subtitle="A local AWS misconfiguration auditor for S3 and IAM, built for a COMP3000 final-year project."
+        subtitle="A local AWS misconfiguration auditor for S3 and IAM, EC2/Network, and Secrets Checks."
         action={
           <Button
             asChild
@@ -73,7 +73,7 @@ export function AboutCard() {
             <p className="text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-[#9c886f]">
               Version
             </p>
-            <p className="mt-1 text-5xl font-semibold tracking-tight text-[#352d24]">0.2.0</p>
+            <p className="mt-1 text-5xl font-semibold tracking-tight text-[#352d24]">1.0.2</p>
           </SectionCard>
 
           <SectionCard className="border-[#d9e4f1] bg-[#edf4fd]">

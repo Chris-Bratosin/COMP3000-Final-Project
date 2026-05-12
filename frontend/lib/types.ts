@@ -60,7 +60,7 @@ export interface ActivityEntry {
   tone: TimelineTone;
 }
 
-export type ConnectionMethod = "temporary-credentials" | "assume-role" | "env-vars";
+export type ConnectionMethod = "temporary-credentials" | "assume-role";
 export type ScanLevel = "quick" | "standard" | "deep";
 export type RegionScope = "single-region" | "multi-region" | "all-enabled";
 export type OutputFormat = "json" | "html" | "json-html";

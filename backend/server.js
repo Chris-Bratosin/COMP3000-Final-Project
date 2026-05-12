@@ -1,3 +1,14 @@
+// Express HTTP server for the Cloud Misconfiguration Auditor (CMA).
+//
+// Two responsibilities:
+//   1. Validate AWS credentials supplied by the frontend (POST /api/aws/test-connection).
+//   2. Run read-only AWS scans on demand (POST /api/scan/{s3,iam,ec2,secrets})
+//      and persist each result to MongoDB so the Reports page can list history.
+//
+// Every endpoint is rate-limited per IP, CORS is restricted to configured
+// frontend origins, and request bodies are capped at 25 KB to keep the
+// localhost backend resilient even when called from outside the bundled UI.
+
 require('dotenv').config();
 
 const express = require('express');
@@ -14,6 +25,9 @@ const { runSecretsScan } = require('./src/scanners/secretsScanner');
 const { applyReportOptions } = require('./src/scanners/utils');
 const ScanRecord = require('./src/models/ScanRecord');
 
+// Pulls the report-shaping options (severity threshold, evidence/remediation
+// toggles) off the request body so they can be passed to applyReportOptions
+// without leaking unrelated fields into the scanner's response shaping.
 function reportOptionsFromBody(body) {
   return {
     severityThreshold: body?.severityThreshold,
@@ -80,6 +94,12 @@ function isOriginAllowed(origin) {
   return !origin || allowedOrigins.includes(origin);
 }
 
+// ---------------------------------------------------------------------------
+// CORS / request hygiene
+// ---------------------------------------------------------------------------
+// The CMA UI ships with the backend on localhost; we still validate the Origin
+// header so that a browser tab on a different site cannot drive scans against
+// a developer's local AWS credentials.
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 
@@ -157,6 +177,9 @@ const rateLimitScans = createRateLimiter({
   },
 });
 
+// ---------------------------------------------------------------------------
+// Health / liveness routes
+// ---------------------------------------------------------------------------
 app.get('/', (_req, res) => {
   res.send('Express server is running.');
 });
@@ -165,6 +188,9 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
+// Translates AWS SDK error names into user-friendly messages for the UI.
+// Falls back to the raw error.message for anything not explicitly handled so
+// that unknown failure modes still produce a useful surface message.
 function mapAwsConnectionError(error) {
   switch (error.name) {
     case 'InvalidClientTokenId':
@@ -185,6 +211,13 @@ function mapAwsConnectionError(error) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// AWS connection test
+// ---------------------------------------------------------------------------
+// Builds an STS client from whichever credential method the user picked, then
+// calls GetCallerIdentity. A successful round-trip proves the credentials are
+// valid and that STS is reachable from the chosen region. The frontend uses
+// this to gate the Run Scan button.
 app.post('/api/aws/test-connection', rateLimitConnectionTests, async (req, res) => {
   const {
     connectionMethod,
@@ -272,6 +305,21 @@ app.post('/api/aws/test-connection', rateLimitConnectionTests, async (req, res) 
   }
 });
 
+// ---------------------------------------------------------------------------
+// Scan endpoints
+// ---------------------------------------------------------------------------
+// Each scan endpoint follows the same shape:
+//   1. Resolve credentials from the request body (temp creds, assume-role, env).
+//   2. Run the scanner-specific function from src/scanners.
+//   3. Persist the unfiltered result to MongoDB (unless saveScanLogs is false).
+//   4. Apply the user's report-shaping options and return the trimmed result.
+// Persistence uses the unfiltered scan so the history view stays truthful;
+// only the response sent back to the dashboard is filtered.
+
+// Common credential-resolution path used by every scan endpoint. Throws an
+// Error with a `statusCode` property so the route handler can surface 400 vs
+// 500 appropriately. Returns `{ region, credentials }` where credentials may
+// be undefined when env-vars mode lets the SDK pick them up itself.
 async function resolveCredentialsForScan(body) {
   const {
     connectionMethod,
@@ -432,6 +480,12 @@ app.post('/api/scan/iam', rateLimitScans, async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// History endpoint
+// ---------------------------------------------------------------------------
+// Returns the 50 most recent ScanRecord rows for the Reports page. The
+// frontend groups them by runId so that one Run Scan click (which fans out
+// to up to four parallel scanners) appears as a single row.
 app.get('/api/scans', async (_req, res) => {
   try {
     const records = await ScanRecord.find({})
@@ -448,6 +502,13 @@ app.get('/api/scans', async (_req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Bootstrap
+// ---------------------------------------------------------------------------
+// Listen first so the HTTP surface is up before MongoDB completes its
+// handshake — this keeps /health responsive even when the database is slow
+// or unavailable. The connection is best-effort; scan endpoints still run
+// without it, only persistence (and the /api/scans listing) is affected.
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });

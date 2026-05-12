@@ -1,3 +1,17 @@
+// IAM scanner.
+//
+// Mix of account-level and per-user checks. The flow is:
+//   1. Account-level: root MFA enabled, password policy strength.
+//   2. List all IAM users once (ListUsers), then for each user check
+//      MFA registration, unused/never-used active access keys, attached
+//      AWS-managed admin policies, and inline policies with wildcard
+//      Action/Resource.
+//   3. Pull the IAM credential report (CSV) and flag console passwords that
+//      are enabled but unused for over 90 days.
+//
+// IAM is global, so every check uses a single us-east-1 client regardless of
+// the request's primary region.
+
 const {
   IAMClient,
   GetAccountSummaryCommand,

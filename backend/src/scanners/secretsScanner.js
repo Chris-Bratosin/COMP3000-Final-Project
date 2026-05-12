@@ -1,3 +1,17 @@
+// Secrets Manager scanner.
+//
+// Three per-secret inspections:
+//   - Automatic rotation enabled (RotationEnabled). Long-lived secrets
+//     accumulate exposure risk and should rotate every 30-90 days.
+//   - Encryption uses a customer-managed KMS key, not the default
+//     AWS-managed alias/aws/secretsmanager (which can't be scoped via key
+//     policy to specific principals).
+//   - Resource policy doesn't grant access to wildcard principals.
+//
+// Secrets are region-scoped, so this follows the same per-region fan-out as
+// the EC2 scanner and uses DescribeRegions to discover targets when none are
+// explicitly listed.
+
 const {
   SecretsManagerClient,
   ListSecretsCommand,

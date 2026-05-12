@@ -1,3 +1,16 @@
+// Unit tests for scan-settings-storage.
+//
+// The Scan Settings form persists the user's preferences to localStorage so
+// they survive a page reload. Credentials must NEVER hit storage — that's
+// the central security invariant these tests enforce. Coverage includes:
+//   - stripCredentials zeros every credential field while keeping non-creds.
+//   - saveSettings never writes credentials, even as substrings (defends
+//     against future bugs that JSON.stringify the wrong object).
+//   - loadSettings ignores any credentials that ended up in storage from
+//     tampering, resets stale "Connected" status, and gracefully recovers
+//     from malformed JSON.
+// Run with `npm test`.
+
 import {
   loadSettings,
   saveSettings,

@@ -1,3 +1,18 @@
+// S3 scanner.
+//
+// Runs six per-bucket security checks via read-only S3 SDK calls:
+//   - Public Access Block configured and fully enabled
+//   - Bucket policy not granting public access
+//   - ACL not granting AllUsers / AuthenticatedUsers
+//   - Default encryption configured
+//   - Versioning enabled
+//   - Server access logging enabled
+//
+// Bucket discovery: if the request lists explicit bucket names we use those,
+// otherwise we ListBuckets and inspect every bucket in the account. Each
+// bucket is then resolved to its actual region (S3 buckets are regional but
+// the listing endpoint is global) and inspected from a region-correct client.
+
 const {
   S3Client,
   ListBucketsCommand,
@@ -45,6 +60,9 @@ function makeFinding({ ruleId, title, severity, bucket, region, evidence, remedi
   });
 }
 
+// Public Access Block (PAB) is the bucket-level firewall against accidental
+// public exposure. Two failure modes are flagged separately so the dashboard
+// can distinguish "never configured" from "configured but with a gap".
 async function checkPublicAccessBlock(client, bucket, region) {
   const ruleId = 's3-public-access-block';
   const result = await safeCall(client.send(new GetPublicAccessBlockCommand({ Bucket: bucket })));
@@ -181,6 +199,11 @@ async function checkLogging(client, bucket, region) {
   return null;
 }
 
+// S3 buckets are region-scoped but ListBuckets / GetBucketLocation are global.
+// We need each bucket's real region before scanning so the per-bucket client
+// is region-correct. AWS uses two legacy quirks: an empty LocationConstraint
+// means us-east-1, and the literal "EU" means eu-west-1. Returns null on
+// any error so the caller can fall back to the request's primary region.
 async function resolveBucketRegion(globalClient, bucket) {
   const result = await safeCall(globalClient.send(new GetBucketLocationCommand({ Bucket: bucket })));
   if (!result || result.__error) return null;
@@ -190,6 +213,9 @@ async function resolveBucketRegion(globalClient, bucket) {
   return loc;
 }
 
+// Runs every per-bucket check in parallel for one bucket and routes each
+// outcome into findings / denied / errored buckets. Caller aggregates these
+// into the scan-level summary.
 async function scanBucket(bucket, region, credentials) {
   const client = buildClient({ region, credentials });
   const outcomes = await Promise.all([

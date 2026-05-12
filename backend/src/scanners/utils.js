@@ -1,9 +1,24 @@
 // Shared helpers used by every scanner module (s3Scanner, iamScanner, ...).
-// Each scanner produces three kinds of outcome: a finding, a "denied" marker
-// when AWS rejects the read with AccessDenied, or an "errored" marker when
-// AWS responds with any other error. Aggregators in runS3Scan / runIamScan
-// route each outcome to the right summary bucket.
+//
+// All scanners speak the same "outcome" vocabulary so the run-level
+// aggregator can summarise results uniformly:
+//
+//   - Finding         : a real misconfiguration. Has ruleId, severity,
+//                       evidence, remediation. Goes into summary.findings.
+//   - Denied outcome  : the SDK call returned an AccessDenied-style error.
+//                       The check could not run because the credentials lack
+//                       the required permission. Goes into summary.checksDenied.
+//   - Errored outcome : the SDK call failed for any other reason (network,
+//                       throttling, malformed response). Goes into
+//                       summary.checksErrored.
+//
+// Keeping these three buckets separate is important: a "0 findings" result
+// only means "good posture" if it came from checks that actually ran, not
+// from checks that were silently denied.
 
+// Wraps a promise so a rejection becomes a sentinel object rather than an
+// exception. Lets the per-check helpers branch on `result.__error` instead of
+// wrapping every SDK call in its own try/catch.
 async function safeCall(promise) {
   try {
     return await promise;
@@ -47,6 +62,9 @@ function erroredOutcome(ruleId, error) {
   };
 }
 
+// Canonical finding shape used by every scanner. The composite `id`
+// (ruleId:resourceId) uniquely identifies a finding within a scan and is
+// what the dashboard uses as a React key.
 function makeFinding({ ruleId, title, severity, service, resourceId, region, evidence, remediation }) {
   return {
     id: `${ruleId}:${resourceId}`,

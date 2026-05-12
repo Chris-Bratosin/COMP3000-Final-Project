@@ -360,7 +360,6 @@ export const aboutStackBadges: StackBadge[] = [
   { id: "express", label: "Express.js", tone: "green" },
   { id: "mongodb", label: "MongoDB", tone: "green" },
   { id: "aws-sdk", label: "AWS SDK", tone: "blue" },
-  { id: "vercel", label: "Vercel", tone: "navy" },
 ];
 
 export const complianceFrameworks: ComplianceFramework[] = [

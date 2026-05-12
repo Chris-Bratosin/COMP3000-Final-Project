@@ -1,5 +1,16 @@
 'use strict';
 
+// Unit tests for the EC2 scanner.
+//
+// Coverage falls into two layers:
+//   - Pure helper functions (isPublicIngress, ruleCoversPort, rulePortSpan)
+//     get exhaustive boolean coverage since the security-group classifier
+//     depends on every edge case being right.
+//   - inspectSecurityGroup / scanSecurityGroupsInRegion / scanVolumesInRegion
+//     get the same fake-client treatment as the other scanner test files —
+//     they cover both happy paths and the EC2-specific access-denied flavours
+//     (UnauthorizedOperation, AuthFailure). Run with `node --test`.
+
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 

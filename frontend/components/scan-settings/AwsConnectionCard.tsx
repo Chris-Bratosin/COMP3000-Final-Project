@@ -56,7 +56,6 @@ export function AwsConnectionCard({
             <SelectContent>
               <SelectItem value="temporary-credentials">Temporary Credentials</SelectItem>
               <SelectItem value="assume-role">Assume Role</SelectItem>
-              <SelectItem value="env-vars">Environment Variables</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -104,12 +103,6 @@ export function AwsConnectionCard({
               className="h-11 rounded-xl border-[#e4d8c4] bg-[#fcfaf6]"
             />
           </>
-        ) : null}
-
-        {settings.connectionMethod === "env-vars" ? (
-          <div className="rounded-[1.1rem] border border-[#eadfcf] bg-[#fcfaf6] px-4 py-4 text-sm leading-6 text-[#7d6f5d]">
-            CMA will read AWS credentials from the backend environment for local testing.
-          </div>
         ) : null}
 
         <div className="grid gap-2">

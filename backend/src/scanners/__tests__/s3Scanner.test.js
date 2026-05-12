@@ -1,5 +1,14 @@
 'use strict';
 
+// Unit tests for the S3 scanner check functions.
+//
+// Strategy: tests do NOT hit AWS. Each scanner check takes a `client` object
+// and calls `client.send(command)`, so we hand it a fake whose .send() looks
+// at the command's class name and returns a scripted response (or throws a
+// scripted error). This lets us cover every branch — success, AccessDenied,
+// per-service "no such configuration" errors, and unexpected failures —
+// without credentials or network. Run with `node --test`.
+
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 

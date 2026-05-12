@@ -1,3 +1,16 @@
+// Frontend scan client + result transforms.
+//
+// Two responsibilities:
+//   1. POST to the four backend scan endpoints (runS3Scan, runIamScan,
+//      runEc2Scan, runSecretsScan) and return a typed BackendScanResult.
+//   2. Translate that backend payload into the shapes the dashboard, logs
+//      page, and reports table render — the UI never reaches into the raw
+//      BackendScanResult directly.
+//
+// Run-level clustering: every Run Scan click stamps a single runId across
+// the up-to-four parallel scanner POSTs. groupScansByRunId reassembles those
+// records on the Reports page so one click reads as one row.
+
 import type {
   ActivityEntry,
   Finding,

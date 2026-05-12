@@ -1,3 +1,11 @@
+// Mongoose schema for a single persisted scan run.
+//
+// One Run Scan click can produce up to four ScanRecord documents (S3, IAM,
+// EC2, Secrets) — they're stitched back together on the Reports page by
+// shared `runId`. Field shape mirrors the BackendScanResult that the
+// frontend already understands, so the dashboard can display a freshly-run
+// scan and a historical row interchangeably.
+
 const mongoose = require('mongoose');
 
 const findingSchema = new mongoose.Schema(

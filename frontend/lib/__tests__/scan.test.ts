@@ -1,3 +1,19 @@
+// Unit tests for the frontend scan helpers (lib/scan.ts).
+//
+// Covers the pure data transforms that translate a BackendScanResult into the
+// shapes the dashboard, logs page, and reports table consume:
+//   - mapScanToDashboard : metrics, posture, risk pie, tips
+//   - mapScanToLogs      : structured log lines from a scan
+//   - mapScanToReport    : single ReportRecord summary
+//   - selectedScannerTypes: derives which scanner endpoints to hit from the
+//     user's checkbox state
+//   - mergeScanResults / groupScansByRunId / newRunId / inferScannerLabel:
+//     the runId-based clustering that stitches parallel scanner results from
+//     one Run Scan click into a single row.
+//
+// All inputs are constructed by makeScan/makeFinding factories so each test
+// only declares the fields it actually exercises. Run with `npm test`.
+
 import {
   groupScansByRunId,
   inferScannerLabel,

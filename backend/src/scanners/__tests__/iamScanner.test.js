@@ -1,5 +1,13 @@
 'use strict';
 
+// Unit tests for the IAM scanner check functions.
+//
+// Same fake-client strategy as s3Scanner.test.js, but extended to handle
+// commands sent multiple times in one check (e.g. ListMFADevices fires once
+// per IAM user). When a test scripts `responses[name]` as an array, the fake
+// consumes successive entries on each call so each user can have a different
+// scripted result. Run with `node --test`.
+
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 

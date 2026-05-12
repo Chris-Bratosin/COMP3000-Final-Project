@@ -37,6 +37,12 @@ export const issueDescriptions: Record<string, string> = {
 
   "iam-user-admin-policy-attached":
     "This IAM user has the AWS-managed AdministratorAccess policy attached directly to their identity. Direct admin attachment makes a leaked credential catastrophic: any attacker with the user's keys gets full account control with no escalation needed. Best practice is to grant administrative permissions through an IAM role assumed only when needed, or through a group with auditable membership, so that day-to-day credentials carry the minimum permissions required.",
+
+  "ec2-sg-all-ports-public":
+    "This security group contains an inbound rule that allows all protocols and all ports from 0.0.0.0/0 (any IP address on the internet). An all-traffic rule effectively disables the firewall for every instance in the group: any port, any protocol, any service running on those instances is reachable from the public internet. This is the most dangerous security group configuration possible and is typically the result of troubleshooting a connection issue and forgetting to revert the rule.",
+
+  "ec2-sg-port-22-public":
+    "This security group allows inbound SSH (TCP port 22) from 0.0.0.0/0, meaning any host on the internet can attempt to connect. SSH is the primary remote administration protocol for Linux instances and is a constant target for automated credential-stuffing and brute-force attacks. Even with key-based auth, exposing port 22 publicly widens the attack surface unnecessarily. The recommended alternative is to restrict the source CIDR to a known IP range, or to remove the rule entirely and use AWS Systems Manager Session Manager for shell access without an open inbound port.",
 };
 
 export function getIssueDescription(ruleId: string | undefined): string | null {

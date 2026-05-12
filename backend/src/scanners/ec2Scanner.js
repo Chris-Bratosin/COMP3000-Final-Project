@@ -1,3 +1,17 @@
+// EC2 scanner.
+//
+// Two per-region inspections:
+//   - Security groups: any ingress rule from 0.0.0.0/0 (or ::/0) is
+//     classified as port 22 (SSH) public, port 3389 (RDP) public, all-ports
+//     public, or broad ingress (a wide port span that doesn't match the
+//     specific rules above). Most-specific finding wins to avoid duplicate
+//     noise on the dashboard.
+//   - EBS volumes: any volume with Encrypted=false is flagged.
+//
+// Region targeting: if the request lists explicit regions we use those,
+// otherwise we DescribeRegions(AllRegions=false) to enumerate the account's
+// enabled regions. The two regional scans run concurrently per region.
+
 const {
   EC2Client,
   DescribeRegionsCommand,
