@@ -44,13 +44,13 @@ Run these commands from the project root:
 Start the frontend and backend containers:
 
 ```sh
-docker compose up --build
+docker compose up 
 ```
 
 Stop the containers:
 
 ```sh
-docker compose down
+docker compose down -v
 ```
 
 ---
